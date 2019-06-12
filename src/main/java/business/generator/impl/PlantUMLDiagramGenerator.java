@@ -28,20 +28,9 @@ import mojos.DocumentationMojo;
  * @author gmittmann
  *
  */
-public class PlantUMLDiagramGenerator implements DocumentGenerator {
+public class PlantUMLDiagramGenerator {
 	
-	private boolean visualize;
-	
-	public PlantUMLDiagramGenerator(boolean visualize) {
-		this.visualize = visualize;
-	}
-	
-	public void setVisualize(boolean visualize) {
-		this.visualize = visualize;
-	}
-
-	@Override
-	public List<File> generateDocuments(File targetFolder, File... srcFolders) {
+	public List<File> generateDocuments(File targetFolder, boolean visualize, File... srcFolders) {
 		List<File> diagramFiles = new ArrayList<>();
 
 		// Find files and create CollectedMavenInfoObjects

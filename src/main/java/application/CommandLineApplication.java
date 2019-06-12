@@ -46,7 +46,7 @@ public class CommandLineApplication {
 				formatXML = true;
 				break;
 
-			case "pltUML":
+			case "pltuml":
 				formatplantUML = true;
 				break;
 
@@ -72,9 +72,10 @@ public class CommandLineApplication {
 
 		if (formatplantUML) {
 			System.out.println("Generating PlantUML-Descriptions" + (visualize ? " and -Graphs" : "."));
-			PlantUMLDiagramGenerator diagramGenerator = new PlantUMLDiagramGenerator(visualize);
-			generatedFiles.addAll(diagramGenerator.generateDocuments(targetFolder, srcFolder));
+			PlantUMLDiagramGenerator diagramGenerator = new PlantUMLDiagramGenerator();
+			generatedFiles.addAll(diagramGenerator.generateDocuments(targetFolder, visualize, srcFolder));
 		}
+		
 		if (formatXML) {
 			System.out.println("Generating xml description files.");
 			XMLDescriptionGenerator xmlDescriptionGenerator = new XMLDescriptionGenerator();
