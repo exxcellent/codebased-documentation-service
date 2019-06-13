@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema targetNamespace="xyz"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:common="xyz"
+    xmlns="xyz"
+    elementFormDefault="qualified">
+
+
+    <xsd:complexType name="dependencies">
+        <xsd:sequence>
+            <xsd:element name="dependency" type="xsd:string" maxOccurs="unbounded" minOccurs="0"/>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:complexType name="component">
+        <xsd:sequence>
+            <xsd:element name="component-dependencies" type="dependencies" maxOccurs="1" minOccurs="0"/>
+        </xsd:sequence>
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+    </xsd:complexType>
+
+    <xsd:complexType name="module">
+        <xsd:sequence>
+            <xsd:element name="module-dependencies" type="dependencies" maxOccurs="1" minOccurs="0"/>
+            <xsd:element name="components" type="component" maxOccurs="unbounded" minOccurs="0"/>
+        </xsd:sequence>
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+    </xsd:complexType>
+
+    <xsd:complexType name="service">
+        <xsd:sequence>
+            <xsd:element name="service-dependencies" type="dependencies" maxOccurs="1" minOccurs="0"/>
+            <xsd:element name="modules" type="module" maxOccurs="unbounded" minOccurs="0"/>
+        </xsd:sequence>
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+    </xsd:complexType>
+
+    <xsd:complexType name="subsystem">
+        <xsd:sequence>
+            <xsd:element name="subsystem-dependencies" type="dependencies" maxOccurs="1" minOccurs="0"/>
+            <xsd:element name="services" type="service" maxOccurs="unbounded" minOccurs="0"/>
+        </xsd:sequence>
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+    </xsd:complexType>
+
+    <xsd:complexType name="system">
+        <xsd:sequence>
+            <xsd:element name="system-dependencies" type="dependencies" maxOccurs="1" minOccurs="0"/>
+            <xsd:element name="subsystems" type="subsystem" maxOccurs="unbounded" minOccurs="0"/>
+        </xsd:sequence>
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+    </xsd:complexType>
+
+</xsd:schema>

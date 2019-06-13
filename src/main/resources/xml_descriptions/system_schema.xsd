@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema targetNamespace="xyz"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:common="xyz"
+    xmlns="xyz"
+    elementFormDefault="qualified">
+
+    <xsd:include schemaLocation="base_schema.xsd"/>
+
+    <xsd:element name="systems">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:element name="system" type="system" minOccurs="0" maxOccurs="unbounded"/>
+            </xsd:sequence>
+        </xsd:complexType>
+    </xsd:element>
+
+</xsd:schema>

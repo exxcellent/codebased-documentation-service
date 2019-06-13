@@ -81,7 +81,7 @@ public class PlantUMLDiagramGenerator {
 				src += "@enduml\n";
 				umlDescriptions.put(currentInfo.getTag(), src);
 			} else {
-				System.out.println("No info about module dependencies found for: " + currentInfo.getName());
+				System.out.println("No info about module dependencies found for: " + currentInfo.getProjectName());
 			}
 		}
 
@@ -154,7 +154,7 @@ public class PlantUMLDiagramGenerator {
 				src += "@enduml\n";
 				umlDescriptions.put(currentInfo.getTag(), src);
 			} else {
-				System.out.println("No info about module dependencies found for: " + currentInfo.getName());
+				System.out.println("No info about module dependencies found for: " + currentInfo.getProjectName());
 			}
 		}
 
@@ -190,10 +190,10 @@ public class PlantUMLDiagramGenerator {
 
 		/* create packages */
 		for (ComponentInfoObject moduleComponent : componentList) {
-			diagramString += "package " + "\"" + moduleComponent.getName() + "\" { \n";
+			diagramString += "package " + "\"" + moduleComponent.getModuleName() + "\" { \n";
 
 			for (PackageInfoObject info : moduleComponent.getComponents()) {
-				diagramString += "package " + "\"" + info.getName() + "\" {} \n";
+				diagramString += "package " + "\"" + info.getPackageName() + "\" {} \n";
 			}
 
 			diagramString += "}\n\n";
@@ -205,7 +205,7 @@ public class PlantUMLDiagramGenerator {
 		for (ComponentInfoObject moduleComponent : componentList) {
 			for (PackageInfoObject info : moduleComponent.getComponents()) {
 				for (String dependency : info.getDependsOn()) {
-					diagramString += "\"" + info.getName() + "\"" + " --> " + "\"" + dependency + "\"\n";
+					diagramString += "\"" + info.getPackageName() + "\"" + " --> " + "\"" + dependency + "\"\n";
 				}
 			}
 
@@ -284,7 +284,7 @@ public class PlantUMLDiagramGenerator {
 				systems.add(sys);
 			}
 
-			sys.addSubsystem(currentInfo.getSubsystem(), currentInfo.getName());
+			sys.addSubsystem(currentInfo.getSubsystem(), currentInfo.getProjectName());
 
 		}
 
