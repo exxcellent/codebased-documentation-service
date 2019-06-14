@@ -10,6 +10,7 @@ import org.springframework.boot.SpringApplication;
 
 import business.generator.impl.PlantUMLDiagramGenerator;
 import business.generator.impl.XMLDescriptionGenerator;
+import data.file.FileWriter;
 
 public class CommandLineApplication {
 
@@ -73,13 +74,13 @@ public class CommandLineApplication {
 		if (formatplantUML) {
 			System.out.println("Generating PlantUML-Descriptions" + (visualize ? " and -Graphs" : "."));
 			PlantUMLDiagramGenerator diagramGenerator = new PlantUMLDiagramGenerator();
-			generatedFiles.addAll(diagramGenerator.generateDocuments(targetFolder, visualize, srcFolder));
+			generatedFiles.addAll(diagramGenerator.generateDocuments(targetFolder, visualize, new FileWriter(), srcFolder));
 		}
 		
 		if (formatXML) {
 			System.out.println("Generating xml description files.");
 			XMLDescriptionGenerator xmlDescriptionGenerator = new XMLDescriptionGenerator();
-			generatedFiles.addAll(xmlDescriptionGenerator.generateDocuments(targetFolder, srcFolder));
+			generatedFiles.addAll(xmlDescriptionGenerator.generateDocuments(targetFolder, new FileWriter(), srcFolder));
 		}
 		
 		System.out.println("generated files:");

@@ -8,13 +8,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import business.converter.InfoObjectConverter;
-import business.generator.interfaces.DocumentGenerator;
 import business.model.SystemDescriptionModel;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.maven.ComponentInfoObject;
 import collectors.models.maven.PackageInfoObject;
 import data.file.FileReader;
-import data.file.PlantUMLFileWriter;
+import data.interfaces.DataOutputToFile;
 import mojos.DocumentationMojo;
 
 /**
@@ -30,7 +29,7 @@ import mojos.DocumentationMojo;
  */
 public class PlantUMLDiagramGenerator {
 	
-	public List<File> generateDocuments(File targetFolder, boolean visualize, File... srcFolders) {
+	public List<File> generateDocuments(File targetFolder, boolean visualize, DataOutputToFile output, File... srcFolders) {
 		List<File> diagramFiles = new ArrayList<>();
 
 		// Find files and create CollectedMavenInfoObjects
@@ -46,10 +45,10 @@ public class PlantUMLDiagramGenerator {
 				CollectedMavenInfoObject.class);
 
 		// Create diagrams
-		diagramFiles.addAll(createModuleDiagram(infoObjects, targetFolder, visualize));
-		diagramFiles.addAll(createComponentDiagram(infoObjects, targetFolder, visualize));
-		diagramFiles.addAll(createSystemDiagram(infoObjects, targetFolder, visualize));
-		diagramFiles.addAll(createSystemMicroserviceDiagram(infoObjects, targetFolder, visualize));
+		diagramFiles.addAll(createModuleDiagram(infoObjects, targetFolder, visualize, output));
+		diagramFiles.addAll(createComponentDiagram(infoObjects, targetFolder, visualize, output));
+		diagramFiles.addAll(createSystemDiagram(infoObjects, targetFolder, visualize, output));
+		diagramFiles.addAll(createSystemMicroserviceDiagram(infoObjects, targetFolder, visualize, output));
 
 		return diagramFiles;
 	}
@@ -66,7 +65,7 @@ public class PlantUMLDiagramGenerator {
 	 * @return List of created files.
 	 */
 	public List<File> createModuleDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize) {
+			boolean visualize, DataOutputToFile output) {
 		System.out.println("---- creating diagrams for modules ----");
 
 		Map<String, String> umlDescriptions = new HashMap<>();
@@ -89,10 +88,10 @@ public class PlantUMLDiagramGenerator {
 		for (Entry<String, String> descriptionEntry : umlDescriptions.entrySet()) {
 
 			if (visualize) {
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramPngFile(descriptionEntry, targetFolder, "Module"));
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramSVGFile(descriptionEntry, targetFolder, "Module"));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "module"), ".png", targetFolder));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "module"), ".svg", targetFolder));
 			}
-			diagramFiles.addAll(PlantUMLFileWriter.createDiagramDescriptionFile(descriptionEntry, targetFolder, "Module"));
+			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramNameForDescription(descriptionEntry, "module"), ".txt", targetFolder));
 
 		}
 
@@ -139,7 +138,7 @@ public class PlantUMLDiagramGenerator {
 	 * @return List of created files.
 	 */
 	public List<File> createComponentDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize) {
+			boolean visualize, DataOutputToFile output) {
 		System.out.println("---- creating diagrams for components ----");
 
 		Map<String, String> umlDescriptions = new HashMap<>();
@@ -162,10 +161,10 @@ public class PlantUMLDiagramGenerator {
 		for (Entry<String, String> descriptionEntry : umlDescriptions.entrySet()) {
 
 			if (visualize) {
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramPngFile(descriptionEntry, targetFolder, "Component"));
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramSVGFile(descriptionEntry, targetFolder, "Component"));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "component"), ".png", targetFolder));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "component"), ".svg", targetFolder));
 			}
-			diagramFiles.addAll(PlantUMLFileWriter.createDiagramDescriptionFile(descriptionEntry, targetFolder, "Component"));
+			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "component"), ".txt", targetFolder));
 
 		}
 
@@ -216,7 +215,7 @@ public class PlantUMLDiagramGenerator {
 	}
 
 	public List<File> createSystemDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize) {
+			boolean visualize, DataOutputToFile output) {
 		System.out.println("---- creating system diagram ----");		
 
 		Map<String, List<String>> sysToSubSys = new HashMap<>();
@@ -244,10 +243,11 @@ public class PlantUMLDiagramGenerator {
 		List<File> diagramFiles = new ArrayList<>();
 		for (Entry<String, String> descriptionEntry : map.entrySet()) {
 			if (visualize) {
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramPngFile(descriptionEntry, targetFolder, "System"));
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramSVGFile(descriptionEntry, targetFolder, "System"));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "system"), ".png", targetFolder));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "system"), ".svg", targetFolder));
 			}
-			diagramFiles.addAll(PlantUMLFileWriter.createDiagramDescriptionFile(descriptionEntry, targetFolder, "System"));
+			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramNameForDescription(descriptionEntry, "system"), ".txt", targetFolder));
+
 		}
 
 		return diagramFiles;
@@ -267,7 +267,7 @@ public class PlantUMLDiagramGenerator {
 	}
 
 	public List<File> createSystemMicroserviceDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize) {
+			boolean visualize, DataOutputToFile output) {
 		System.out.println("---- creating diagrams for microservices in system ----");
 
 		List<SystemDescriptionModel> systems = new ArrayList<>();
@@ -301,10 +301,11 @@ public class PlantUMLDiagramGenerator {
 		List<File> diagramFiles = new ArrayList<>();
 		for (Entry<String, String> descriptionEntry : map.entrySet()) {
 			if (visualize) {
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramPngFile(descriptionEntry, targetFolder, "Microservices_System"));
-				diagramFiles.addAll(PlantUMLFileWriter.createDiagramSVGFile(descriptionEntry, targetFolder, "Microservices_System"));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "microservice_system"), ".png", targetFolder));
+				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramName(descriptionEntry, "microservice_system"), ".svg", targetFolder));
 			}
-			diagramFiles.addAll(PlantUMLFileWriter.createDiagramDescriptionFile(descriptionEntry, targetFolder, "Microservices_System"));
+			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(), generateDiagramNameForDescription(descriptionEntry, "microservice_system"), ".txt", targetFolder));
+
 		}
 
 		return diagramFiles;
@@ -326,5 +327,13 @@ public class PlantUMLDiagramGenerator {
 		diagramDescription += "}\n\n";
 
 		return diagramDescription;
+	}
+	
+	private String generateDiagramName(Entry<String, String> descriptionEntry, String diagramType) {
+		return descriptionEntry.getKey() + "_" + diagramType + "_Diagram";
+	}
+	
+	private String generateDiagramNameForDescription(Entry<String, String> descriptionEntry, String diagramType) {
+		return descriptionEntry.getKey() + "_" + diagramType + "_PlantUML_Description";
 	}
 }

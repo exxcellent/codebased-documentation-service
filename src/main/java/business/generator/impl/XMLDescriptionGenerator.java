@@ -2,28 +2,21 @@ package business.generator.impl;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import javax.xml.bind.JAXBException;
-
-import org.jdom2.Document;
-import org.jdom2.Element;
+import javax.xml.bind.JAXBElement;
+import javax.xml.bind.Marshaller;
 
 import business.converter.InfoObjectConverter;
-import business.generator.interfaces.DocumentGenerator;
+import business.converter.XMLObjectConverter;
 import collectors.models.maven.CollectedMavenInfoObject;
-import collectors.models.maven.ComponentInfoObject;
-import collectors.models.maven.ModuleInfoObject;
-import collectors.models.maven.PackageInfoObject;
 import data.file.FileReader;
 import data.file.JaxbStringMarshaller;
-import data.file.XMLFileWriter;
-import data.model.xml.Component;
-import data.model.xml.Dependencies;
+import data.interfaces.DataOutputToFile;
 import data.model.xml.Module;
 import data.model.xml.ObjectFactory;
+import data.model.xml.Service;
+import data.model.xml.Subsystem;
 import data.model.xml.Systems;
 import mojos.DocumentationMojo;
 
@@ -33,12 +26,11 @@ import mojos.DocumentationMojo;
  * @author gmittmann
  *
  */
-public class XMLDescriptionGenerator implements DocumentGenerator {
+public class XMLDescriptionGenerator {
 
 //	private final String XSD_FILES_PATH = "resources/xml_descriptions";// this.getClass().getResource("/xml_descriptions/");
 
-	@Override
-	public List<File> generateDocuments(File targetFolder, File... srcFolders) {
+	public List<File> generateDocuments(File targetFolder, DataOutputToFile output, File... srcFolders) {
 		List<File> diagramFiles = new ArrayList<>();
 
 		// Find files and create CollectedMavenInfoObjects
@@ -53,77 +45,127 @@ public class XMLDescriptionGenerator implements DocumentGenerator {
 		List<CollectedMavenInfoObject> infoObjects = InfoObjectConverter.createJSONObjects(foundFiles,
 				CollectedMavenInfoObject.class);
 
-		diagramFiles.addAll(generateComponentDependencyDescription(targetFolder, infoObjects));
-		diagramFiles.addAll(generateModuleDependencyDescription(targetFolder, infoObjects));
-		diagramFiles.addAll(generateSystemDescription(targetFolder, infoObjects));
+		diagramFiles.addAll(generateComponentDependencyDescription(targetFolder, infoObjects, output));
+		diagramFiles.addAll(generateModuleDependencyDescription(targetFolder, infoObjects, output));
+		diagramFiles.addAll(generateSystemDescription(targetFolder, infoObjects, output));
 
 		return diagramFiles;
 	}
 
-	public List<File> generateModuleDependencyDescription(File targetFolder,
-			List<CollectedMavenInfoObject> infoObjects) {
+	public List<File> generateModuleDependencyDescription(File targetFolder, List<CollectedMavenInfoObject> infoObjects,
+			DataOutputToFile output) {
 
 		List<File> generatedFiles = new ArrayList<>();
-		
-		XMLObjectCreator creator = new XMLObjectCreator();
+
+		XMLObjectConverter creator = new XMLObjectConverter();
 		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
-		creator.addSubsystems(infoObjects, systems);
+		List<Subsystem> subsys = creator.addSubsystems(infoObjects, systems);
+		List<Service> services = creator.addServices(infoObjects, subsys);
+		creator.addModules(infoObjects, services, true);
+
 		Systems sys = new Systems();
 		sys.getSystem().addAll(systems);
-		
+
 		try {
 			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 			String sysString = marshaller.marshall(sys);
-			System.out.println("----");
-			System.out.println(sysString);
-			System.out.println("----");
+			generatedFiles.addAll(output.writeToFile(sysString, "all_modules", ".xml", targetFolder));
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
+		ObjectFactory factory = new ObjectFactory();
+		try {
+			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Service.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			for (Service service : services) {
+				JAXBElement<Service> serviceElement = factory.createService(service);
+				String serviceString = marshaller.marshall(serviceElement);
+				String name = serviceNameToFileName(service, "modules");
+				generatedFiles.addAll(output.writeToFile(serviceString, name, ".xml", targetFolder));
+			}
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
 		return generatedFiles;
 	}
 
 	public List<File> generateComponentDependencyDescription(File targetFolder,
-			List<CollectedMavenInfoObject> infoObjects) {
+			List<CollectedMavenInfoObject> infoObjects, DataOutputToFile output) {
 		List<File> generatedFiles = new ArrayList<>();
-//		ObjectFactory factory = new ObjectFactory();
-//		
-//		for (CollectedMavenInfoObject info : infoObjects) {
-//			Microservice microservice = factory.createMicroservice();
-//			microservice.setMicroserviceName(info.getProjectName());
-//			
-//			
-//			for (ModuleInfoObject moduleInfo : info.getModules()) {
-//				Module mod = new Module();
-//				mod.setModuleName(moduleInfo.getTag());
-//				microservice.getModule().add(mod);
-//			}
-//			
-//			for (ComponentInfoObject componentsInfo : info.getComponents()) {
-//				Module mod = new Module();
-//				mod.setModuleName(componentsInfo.getModuleName());
-//				for (PackageInfoObject packInfo : componentsInfo.getComponents()) {
-//					Component component = new Component();
-//					component.setComponentName(packInfo.getPackageName());
-//					
-//					Dependencies dependencies = new Dependencies();
-//					dependencies.getDependency().addAll(packInfo.getDependsOn());
-//					
-//				}
-//				
-//			}
-//		}
+
+		XMLObjectConverter creator = new XMLObjectConverter();
+		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
+		List<Subsystem> subsys = creator.addSubsystems(infoObjects, systems);
+		List<Service> services = creator.addServices(infoObjects, subsys);
+		List<Module> modules = creator.addModules(infoObjects, services, false);
+		creator.addComponents(infoObjects, modules, true);
+		
+		Systems sys = new Systems();
+		sys.getSystem().addAll(systems);
+		ObjectFactory factory = new ObjectFactory();
+		
+		try {
+			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			String sysString = marshaller.marshall(sys);
+			generatedFiles.addAll(output.writeToFile(sysString, "all_components", ".xml", targetFolder));
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+		try {
+			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Service.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			for (Service service : services) {
+				JAXBElement<Service> serviceElement = factory.createService(service);
+				String serviceString = marshaller.marshall(serviceElement);
+				String name = serviceNameToFileName(service, "components");
+				generatedFiles.addAll(output.writeToFile(serviceString, name, ".xml", targetFolder));
+			}
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
 		return generatedFiles;
 	}
 
-	public List<File> generateSystemDescription(File targetFolder, List<CollectedMavenInfoObject> infoObjects) {
+	public List<File> generateSystemDescription(File targetFolder, List<CollectedMavenInfoObject> infoObjects,
+			DataOutputToFile output) {
 		List<File> generatedFiles = new ArrayList<>();
 		
+
+		XMLObjectConverter creator = new XMLObjectConverter();
+		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
+		List<Subsystem> subsys = creator.addSubsystems(infoObjects, systems);
+		List<Service> services = creator.addServices(infoObjects, subsys);
+		creator.addServiceDependencies(infoObjects, services);
 		
+		Systems sys = new Systems();
+		sys.getSystem().addAll(systems);
+		
+		try {
+			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			String sysString = marshaller.marshall(sys);
+			generatedFiles.addAll(output.writeToFile(sysString, "services", ".xml", targetFolder));
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
 		return generatedFiles;
+	}
+	
+	private String serviceNameToFileName(Service service, String suffix) {
+		return service.getName().trim().replaceAll("[:.,\\s]", "-").replaceAll("[-]+", "-") + "_" + suffix;
 	}
 
 }
