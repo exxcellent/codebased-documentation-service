@@ -8,8 +8,8 @@ import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 
-import business.generator.impl.PlantUMLDiagramGenerator;
-import business.generator.impl.XMLDescriptionGenerator;
+import business.generator.impl.generators.PlantUMLDiagramGenerator;
+import business.generator.impl.generators.XMLDescriptionGenerator;
 import data.file.FileWriter;
 
 public class CommandLineApplication {
