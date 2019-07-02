@@ -2,7 +2,10 @@ package business.generator.impl.generators;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.Marshaller;
@@ -11,10 +14,12 @@ import business.converter.InfoObjectConverter;
 import business.converter.XMLObjectConverter;
 import business.generator.impl.connectors.ServiceConnector;
 import business.model.Dependency;
+import collectors.models.InfoObject;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.restapi.CollectedAPIInfoObject;
 import data.file.FileReader;
 import data.file.JaxbStringMarshaller;
+import data.interfaces.DataOutput;
 import data.interfaces.DataOutputToFile;
 import data.model.xml.Module;
 import data.model.xml.ObjectFactory;
@@ -36,46 +41,73 @@ public class XMLDescriptionGenerator {
 	public List<File> generateDocuments(File targetFolder, DataOutputToFile output, File... srcFolders) {
 		List<File> diagramFiles = new ArrayList<>();
 
-		// Find files and create CollectedMavenInfoObjects
-		List<File> foundFiles = new ArrayList<>();
-		for (File file : srcFolders) {
-			foundFiles.addAll(FileReader.findFilesWithName(file,
-					DocumentationMojo.MAVEN_AGGREGATE_NAME + DocumentationMojo.SUFFIX, ".json"));
-			for (File fl : foundFiles) {
-				System.out.println(fl.getAbsolutePath());
-			}
-		}
-		List<CollectedMavenInfoObject> infoObjects = InfoObjectConverter.createJSONObjects(foundFiles,
-				CollectedMavenInfoObject.class);
+		List<CollectedMavenInfoObject> infoObjects = getCollectedInfoObjects(DocumentationMojo.MAVEN_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedMavenInfoObject.class, srcFolders);
+		List<CollectedAPIInfoObject> apiInfoObjects = getCollectedInfoObjects(DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedAPIInfoObject.class, srcFolders);
 
-		// Find files and create CollectedAPIInfoObjects
-		List<File> foundAPIFiles = new ArrayList<>();
-		for (File file : srcFolders) {
-			foundAPIFiles.addAll(FileReader.findFilesWithName(file,
-					DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, ".json"));
-			for (File fl : foundAPIFiles) {
-				System.out.println(fl.getAbsolutePath());
-			}
-		}
-		List<CollectedAPIInfoObject> apiInfoObjects = InfoObjectConverter.createJSONObjects(foundAPIFiles,
-				CollectedAPIInfoObject.class);
-
+		List<Dependency> serviceDependencies = null;
 		if (apiInfoObjects != null && !apiInfoObjects.isEmpty()) {
 			ServiceConnector connector = new ServiceConnector();
-			List<Dependency> serviceDependencies = connector.connectServices(apiInfoObjects);
+			serviceDependencies = connector.connectServices(apiInfoObjects);
 		}
 
-		diagramFiles.addAll(generateComponentDependencyDescription(targetFolder, infoObjects, output));
-		diagramFiles.addAll(generateModuleDependencyDescription(targetFolder, infoObjects, output));
-		diagramFiles.addAll(generateSystemDescription(targetFolder, infoObjects, output));
+		Map<String, String> cDD = generateComponentDependencyDescription(infoObjects);
+		for (Entry<String, String> entry : cDD.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(entry.getValue(), entry.getKey().split("\\.")[0],
+					entry.getKey().split("\\.")[1], targetFolder));
+		}
+
+		Map<String, String> mDD = generateModuleDependencyDescription(infoObjects);
+		for (Entry<String, String> entry : mDD.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(entry.getValue(), entry.getKey().split("\\.")[0],
+					entry.getKey().split("\\.")[1], targetFolder));
+		}
+
+		Map<String, String> sysD = generateSystemDescription(infoObjects, serviceDependencies);
+		for (Entry<String, String> entry : sysD.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(entry.getValue(), entry.getKey().split("\\.")[0],
+					entry.getKey().split("\\.")[1], targetFolder));
+		}
+
+		Map<String, String> servD = generateServiceDependencyDescription(infoObjects, serviceDependencies);
+		for (Entry<String, String> entry : servD.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(entry.getValue(), entry.getKey().split("\\.")[0],
+					entry.getKey().split("\\.")[1], targetFolder));
+		}
 
 		return diagramFiles;
 	}
 
-	public List<File> generateModuleDependencyDescription(File targetFolder, List<CollectedMavenInfoObject> infoObjects,
-			DataOutputToFile output) {
+	public Map<String, String> generateDocuments(File... srcFolders) {
+		Map<String, String> fileNameToContent = new HashMap<>();
 
-		List<File> generatedFiles = new ArrayList<>();
+		List<CollectedMavenInfoObject> infoObjects = getCollectedInfoObjects(DocumentationMojo.MAVEN_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedMavenInfoObject.class, srcFolders);
+		List<CollectedAPIInfoObject> apiInfoObjects = getCollectedInfoObjects(DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedAPIInfoObject.class, srcFolders);
+
+		List<Dependency> serviceDependencies = null;
+		if (apiInfoObjects != null && !apiInfoObjects.isEmpty()) {
+			ServiceConnector connector = new ServiceConnector();
+			serviceDependencies = connector.connectServices(apiInfoObjects);
+		}
+
+		fileNameToContent.putAll(generateModuleDependencyDescription(infoObjects));
+		fileNameToContent.putAll(generateComponentDependencyDescription(infoObjects));
+		fileNameToContent.putAll(generateSystemDescription(infoObjects, serviceDependencies));
+		fileNameToContent.putAll(generateServiceDependencyDescription(infoObjects, serviceDependencies));
+
+		return fileNameToContent;
+	}
+
+	private <T extends InfoObject> List<T> getCollectedInfoObjects(String name, Class<T> clazz, File... srcFolders) {
+		List<File> foundFiles = new ArrayList<>();
+		for (File file : srcFolders) {
+			foundFiles.addAll(FileReader.findFilesWithName(file, name, ".json"));
+		}
+		return InfoObjectConverter.createJSONObjects(foundFiles, clazz);
+	}
+
+	public Map<String, String> generateModuleDependencyDescription(List<CollectedMavenInfoObject> infoObjects) {
+
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		XMLObjectConverter creator = new XMLObjectConverter();
 		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
@@ -90,9 +122,8 @@ public class XMLDescriptionGenerator {
 			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
 			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 			String sysString = marshaller.marshall(sys);
-			generatedFiles.addAll(output.writeToFile(sysString, "all_modules", ".xml", targetFolder));
+			fileNameToContent.put("all_modules.xml", sysString);
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -104,19 +135,17 @@ public class XMLDescriptionGenerator {
 				JAXBElement<Service> serviceElement = factory.createService(service);
 				String serviceString = marshaller.marshall(serviceElement);
 				String name = serviceNameToFileName(service, "modules");
-				generatedFiles.addAll(output.writeToFile(serviceString, name, ".xml", targetFolder));
+				fileNameToContent.put(name + ".xml", serviceString);
 			}
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
-		return generatedFiles;
+		return fileNameToContent;
 	}
 
-	public List<File> generateComponentDependencyDescription(File targetFolder,
-			List<CollectedMavenInfoObject> infoObjects, DataOutputToFile output) {
-		List<File> generatedFiles = new ArrayList<>();
+	public Map<String, String> generateComponentDependencyDescription(List<CollectedMavenInfoObject> infoObjects) {
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		XMLObjectConverter creator = new XMLObjectConverter();
 		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
@@ -133,9 +162,8 @@ public class XMLDescriptionGenerator {
 			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
 			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 			String sysString = marshaller.marshall(sys);
-			generatedFiles.addAll(output.writeToFile(sysString, "all_components", ".xml", targetFolder));
+			fileNameToContent.put("all_components.xml", sysString);
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -146,25 +174,27 @@ public class XMLDescriptionGenerator {
 				JAXBElement<Service> serviceElement = factory.createService(service);
 				String serviceString = marshaller.marshall(serviceElement);
 				String name = serviceNameToFileName(service, "components");
-				generatedFiles.addAll(output.writeToFile(serviceString, name, ".xml", targetFolder));
+				fileNameToContent.put(name + ".xml", serviceString);
 			}
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
-		return generatedFiles;
+		return fileNameToContent;
 	}
 
-	public List<File> generateSystemDescription(File targetFolder, List<CollectedMavenInfoObject> infoObjects,
-			DataOutputToFile output) {
-		List<File> generatedFiles = new ArrayList<>();
+	public Map<String, String> generateSystemDescription(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies) {
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		XMLObjectConverter creator = new XMLObjectConverter();
 		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
-		List<Subsystem> subsys = creator.addSubsystems(infoObjects, systems);
-		List<Service> services = creator.addServices(infoObjects, subsys);
-		creator.addServiceDependencies(infoObjects, services);
+//		List<Subsystem> subsys = 
+		creator.addSubsystems(infoObjects, systems);
+//		creator.addServices(infoObjects, subsys);
+		if (serviceDependencies != null) {
+			creator.addSystemDependencies(infoObjects, serviceDependencies, systems);
+		}
 
 		Systems sys = new Systems();
 		sys.getSystem().addAll(systems);
@@ -173,19 +203,39 @@ public class XMLDescriptionGenerator {
 			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
 			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 			String sysString = marshaller.marshall(sys);
-			generatedFiles.addAll(output.writeToFile(sysString, "services", ".xml", targetFolder));
+			fileNameToContent.put("systems.xml", sysString);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
-		return generatedFiles;
+		return fileNameToContent;
 	}
 
-	public List<File> generateServiceDependencyDescription(File targetFolder,
-			List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies, DataOutputToFile output) {
-		List<File> generatedFiles = new ArrayList<>();
+	public Map<String, String> generateServiceDependencyDescription(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies) {
+		Map<String, String> fileNameToContent = new HashMap<>();
 
-		return generatedFiles;
+		XMLObjectConverter creator = new XMLObjectConverter();
+		List<data.model.xml.System> systems = creator.getSystems(infoObjects);
+		List<Subsystem> subsys = creator.addSubsystems(infoObjects, systems);
+		List<Service> services = creator.addServices(infoObjects, subsys);
+		if (serviceDependencies != null) {
+			creator.addServiceDependencies(infoObjects, serviceDependencies, services);
+		}
+
+		Systems sys = new Systems();
+		sys.getSystem().addAll(systems);
+
+		try {
+			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			String sysString = marshaller.marshall(sys);
+			fileNameToContent.put("services.xml", sysString);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return fileNameToContent;
 	}
 
 	private String serviceNameToFileName(Service service, String suffix) {

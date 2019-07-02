@@ -20,17 +20,17 @@ public class FileWriter implements DataOutputToFile {
 	@Override
 	public List<File> writeToFile(String content, String fileName, String fileType, File targetFolder) {
 		List<File> createdFiles = new ArrayList<>();
-		String subfolderName = fileType.substring(1);
+		String subfolderName = fileType;
 		File target = Paths.get(targetFolder.getAbsolutePath(), subfolderName).toFile();
-		String name = fileName + fileType;
+		String name = fileName + "." + fileType;
 
 		try {
 			File out = createFile(target, name);
 
-			if (fileType.equalsIgnoreCase(".png") || fileType.equalsIgnoreCase(".svg")) {
+			if (fileType.equalsIgnoreCase("png") || fileType.equalsIgnoreCase("svg")) {
 				SourceStringReader reader = new SourceStringReader(content);
 				FileFormatOption option;
-				if (fileType.equals(".svg")) {
+				if (fileType.equals("svg")) {
 					option = new FileFormatOption(FileFormat.SVG);
 				} else {
 					option = new FileFormatOption(FileFormat.PNG);
@@ -38,6 +38,7 @@ public class FileWriter implements DataOutputToFile {
 				final FileOutputStream outStream = new FileOutputStream(out);
 				reader.generateImage(outStream, option);
 				createdFiles.add(out);
+				outStream.close();
 			} else {
 				Files.write(out.toPath(), content.getBytes());
 				createdFiles.add(out);
@@ -50,7 +51,7 @@ public class FileWriter implements DataOutputToFile {
 		return createdFiles;
 	}
 
-	private static File createFile(File targetFolder, String diagramName) throws IOException {
+	private File createFile(File targetFolder, String diagramName) throws IOException {
 
 		Path path = Paths.get(targetFolder.getAbsolutePath(), diagramName);
 		File out = path.toFile();

@@ -238,7 +238,6 @@ public class ServiceConnector {
 
 		for (APIInfoObject apiInfo : apiInfos) {
 			for (String path : apiInfo.getPathToMethod().keySet()) {
-				System.out.println("KEY: " + path);
 				String formattedPath = formatPath(path);
 				if (pathToServices.containsKey(formattedPath)) {
 					pathToServices.get(formattedPath).add(apiInfo.getMicroserviceName());

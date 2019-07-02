@@ -14,11 +14,14 @@ import business.converter.InfoObjectConverter;
 import business.generator.impl.connectors.ServiceConnector;
 import business.model.Dependency;
 import business.model.SystemDescriptionModel;
+import collectors.models.InfoObject;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.maven.ComponentInfoObject;
 import collectors.models.maven.PackageInfoObject;
 import collectors.models.restapi.CollectedAPIInfoObject;
 import data.file.FileReader;
+import data.file.FileWriter;
+import data.file.PlantUMLDiagramWriter;
 import data.interfaces.DataOutputToFile;
 import mojos.DocumentationMojo;
 import net.sourceforge.plantuml.Log;
@@ -26,90 +29,127 @@ import net.sourceforge.plantuml.Log;
 /**
  * Creates diagrams based on available information in the source folders. The
  * diagrams are created via PlantUML and GraphViz. GraphViz has to be installed
- * on the system, or the created png and svg files are pictures of error
- * messages. The diagrams are saved into subfolders of the target folder: png
- * files in subfolder .\png, svg files in subfolder .\svg and the PlantUml
- * description in subfolder .\txt.
+ * on the system, or the created svg files are pictures/text of error messages.
+ * If the diagrams are saved into files, they will be created in subfolders of
+ * the target folder: svg files in subfolder .\svg and the PlantUml description
+ * in subfolder .\txt.
+ * 
  * 
  * @author gmittmann
  *
  */
 public class PlantUMLDiagramGenerator {
-	
+
 	private static String BEGIN_DIAGRAM = "@startuml\n skinparam componentStyle uml2\n\n";
-	private static String  END_DIAGRAM = "@enduml\n";
+	private static String END_DIAGRAM = "@enduml\n";
 
 	public List<File> generateDocuments(File targetFolder, boolean visualize, DataOutputToFile output,
 			File... srcFolders) {
 		List<File> diagramFiles = new ArrayList<>();
 
-		// Find files and create CollectedMavenInfoObjects
-		List<File> foundFiles = new ArrayList<>();
-		for (File file : srcFolders) {
-			foundFiles.addAll(FileReader.findFilesWithName(file,
-					DocumentationMojo.MAVEN_AGGREGATE_NAME + DocumentationMojo.SUFFIX, ".json"));
-			System.out.println("Files for Maven Info: ");
-			for (File fl : foundFiles) {
-				System.out.println(fl.getAbsolutePath());
-			}
-		}
-		List<CollectedMavenInfoObject> infoObjects = InfoObjectConverter.createJSONObjects(foundFiles,
-				CollectedMavenInfoObject.class);
+		List<CollectedMavenInfoObject> infoObjects = getCollectedInfoObjects(
+				DocumentationMojo.MAVEN_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedMavenInfoObject.class,
+				srcFolders);
+		List<CollectedAPIInfoObject> apiInfoObjects = getCollectedInfoObjects(
+				DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedAPIInfoObject.class,
+				srcFolders);
 
-		// Find files and create CollectedAPIInfoObjects
-		List<File> foundAPIFiles = new ArrayList<>();
-		for (File file : srcFolders) {
-			foundAPIFiles.addAll(FileReader.findFilesWithName(file,
-					DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, ".json"));
-			System.out.println("Files for REST API Info: ");
-			for (File fl : foundAPIFiles) {
-				System.out.println(fl.getAbsolutePath());
-			}
-		}
-		List<CollectedAPIInfoObject> apiInfoObjects = InfoObjectConverter.createJSONObjects(foundAPIFiles,
-				CollectedAPIInfoObject.class);
-
-		// TEST APIINFOOBJECTS
-		System.out.println(apiInfoObjects.size());
-		for (CollectedAPIInfoObject in : apiInfoObjects) {
-			System.out.println(in.getServiceName() + " " + in.getConsume());
-			System.out.println(in.getConsume() == null ? "NULL" : in.getConsume().size());
-		}
-
-		List<Dependency> serviceDependencies;
+		List<Dependency> serviceDependencies = null;
 		if (apiInfoObjects != null && !apiInfoObjects.isEmpty()) {
 			ServiceConnector connector = new ServiceConnector();
 			serviceDependencies = connector.connectServices(apiInfoObjects);
 			System.out.println("FOUND " + serviceDependencies.size() + " DEPENDENCIES");
-		} else {
-			serviceDependencies = null;
-			System.out.println("FOUND NO DEPENDENCIES");
 		}
 
 		// Create diagrams
-		diagramFiles.addAll(createModuleDiagram(infoObjects, targetFolder, visualize, output));
-		diagramFiles.addAll(createComponentDiagram(infoObjects, targetFolder, visualize, output));
-		diagramFiles.addAll(createSystemDiagram(infoObjects, targetFolder, visualize, output));
-		diagramFiles.addAll(
-				createSystemMicroserviceDiagram(infoObjects, serviceDependencies, targetFolder, visualize, output));
+		Map<String, String> modules = createModuleDiagram(infoObjects);
+		for (Entry<String, String> moduleEntry : modules.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(moduleEntry.getValue(), moduleEntry.getKey().split("\\.")[0],
+					moduleEntry.getKey().split("\\.")[1], targetFolder));
+		}
+		Map<String, String> components = createComponentDiagram(infoObjects);
+		for (Entry<String, String> componentEntry : components.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(componentEntry.getValue(), componentEntry.getKey().split("\\.")[0],
+					componentEntry.getKey().split("\\.")[1], targetFolder));
+		}
+		Map<String, String> systems = createSystemDiagram(infoObjects);
+		for (Entry<String, String> systemsEntry : systems.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(systemsEntry.getValue(), systemsEntry.getKey().split("\\.")[0],
+					systemsEntry.getKey().split("\\.")[1], targetFolder));
+		}
+		Map<String, String> service = createServiceDiagram(infoObjects, serviceDependencies);
+		for (Entry<String, String> serviceEntry : service.entrySet()) {
+			diagramFiles.addAll(output.writeToFile(serviceEntry.getValue(), serviceEntry.getKey().split("\\.")[0],
+					serviceEntry.getKey().split("\\.")[1], targetFolder));
+		}
+
+		if (visualize) {
+			PlantUMLDiagramWriter umlWriter = new PlantUMLDiagramWriter();
+			diagramFiles.addAll(umlWriter.generateSVGFile(modules, targetFolder));
+			diagramFiles.addAll(umlWriter.generateSVGFile(components, targetFolder));
+			diagramFiles.addAll(umlWriter.generateSVGFile(systems, targetFolder));
+			diagramFiles.addAll(umlWriter.generateSVGFile(service, targetFolder));
+		}
 
 		return diagramFiles;
+	}
+
+	public Map<String, String> generateDocuments(boolean visualize, File... srcFolders) {
+		Map<String, String> diagramStrings = new HashMap<>();
+
+		List<CollectedMavenInfoObject> infoObjects = getCollectedInfoObjects(
+				DocumentationMojo.MAVEN_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedMavenInfoObject.class,
+				srcFolders);
+		List<CollectedAPIInfoObject> apiInfoObjects = getCollectedInfoObjects(
+				DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedAPIInfoObject.class,
+				srcFolders);
+
+		List<Dependency> serviceDependencies = null;
+		if (apiInfoObjects != null && !apiInfoObjects.isEmpty()) {
+			ServiceConnector connector = new ServiceConnector();
+			serviceDependencies = connector.connectServices(apiInfoObjects);
+			System.out.println("FOUND " + serviceDependencies.size() + " DEPENDENCIES");
+		}
+
+		// Create diagrams
+		Map<String, String> modules = createModuleDiagram(infoObjects);
+		diagramStrings.putAll(modules);
+
+		Map<String, String> components = createComponentDiagram(infoObjects);
+		diagramStrings.putAll(components);
+
+		Map<String, String> systems = createSystemDiagram(infoObjects);
+		diagramStrings.putAll(systems);
+
+		Map<String, String> service = createServiceDiagram(infoObjects, serviceDependencies);
+		diagramStrings.putAll(service);
+
+		if (visualize) {
+			PlantUMLDiagramWriter umlWriter = new PlantUMLDiagramWriter();
+			diagramStrings.putAll(umlWriter.generateSVGString(diagramStrings));
+		}
+
+		return diagramStrings;
+	}
+
+	private <T extends InfoObject> List<T> getCollectedInfoObjects(String name, Class<T> clazz, File... srcFolders) {
+		List<File> foundFiles = new ArrayList<>();
+		for (File file : srcFolders) {
+			foundFiles.addAll(FileReader.findFilesWithName(file, name, ".json"));
+		}
+		return InfoObjectConverter.createJSONObjects(foundFiles, clazz);
 	}
 
 	/**
 	 * Creates package diagrams describing the dependencies between modules.
 	 * 
-	 * @param infoObjects  List of InfoObjects based on whom the diagrams are to be
-	 *                     created.
-	 * @param targetFolder Folder in which the subfolders and diagram files are
-	 *                     written.
-	 * @param visualize    if true, creates png and svg of the diagram, else just
-	 *                     the textual description is created.
-	 * @return List of created files.
+	 * @param infoObjects List of InfoObjects based on whom the diagrams are to be
+	 *                    created.
+	 * @return Map containing mapping from name of the file to content.
 	 */
-	public List<File> createModuleDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize, DataOutputToFile output) {
+	public Map<String, String> createModuleDiagram(List<CollectedMavenInfoObject> infoObjects) {
 		System.out.println("---- creating diagrams for modules ----");
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		Map<String, String> umlDescriptions = new HashMap<>();
 		for (CollectedMavenInfoObject currentInfo : infoObjects) {
@@ -126,28 +166,15 @@ public class PlantUMLDiagramGenerator {
 			}
 		}
 
-		List<File> diagramFiles = new ArrayList<>();
 		for (Entry<String, String> descriptionEntry : umlDescriptions.entrySet()) {
-
-			if (visualize) {
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "module"), ".png", targetFolder));
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "module"), ".svg", targetFolder));
-			}
-			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-					generateDiagramNameForDescription(descriptionEntry, "module"), ".txt", targetFolder));
-
+			fileNameToContent.put(generateDiagramName(descriptionEntry, "modules") + ".txt",
+					descriptionEntry.getValue());
 		}
-		
+
 		String allModules = createAllInServicesDiagramString(umlDescriptions, infoObjects);
-		if (visualize) {
-			diagramFiles.addAll(output.writeToFile(allModules, "All_modules_Diagram", ".png", targetFolder));
-			diagramFiles.addAll(output.writeToFile(allModules, "All_modules_Diagram", ".svg", targetFolder));
-		}
-		diagramFiles.addAll(output.writeToFile(allModules, "All_modules_PlantUML_Description", ".txt", targetFolder));
+		fileNameToContent.put("all_modules.txt", allModules);
 
-		return diagramFiles;
+		return fileNameToContent;
 	}
 
 	/**
@@ -181,17 +208,14 @@ public class PlantUMLDiagramGenerator {
 	 * Creates a package diagram describing the dependencies between components in
 	 * their packages.
 	 * 
-	 * @param infoObjects  List of InfoObjects based on whom the diagrams are to be
-	 *                     created.
-	 * @param targetFolder Folder in which the subfolders and diagram files are
-	 *                     written.
-	 * @param visualize    if true, creates png and svg of the diagram, else just
-	 *                     the textual description is created.
-	 * @return List of created files.
+	 * @param infoObjects List of InfoObjects based on whom the diagrams are to be
+	 *                    created.
+	 * @return Map containing mapping from name of the file to content.
 	 */
-	public List<File> createComponentDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize, DataOutputToFile output) {
+	public Map<String, String> createComponentDiagram(List<CollectedMavenInfoObject> infoObjects) {
 		System.out.println("---- creating diagrams for components ----");
+
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		Map<String, String> umlDescriptions = new HashMap<>();
 		for (CollectedMavenInfoObject currentInfo : infoObjects) {
@@ -207,48 +231,35 @@ public class PlantUMLDiagramGenerator {
 				System.out.println("No info about module dependencies found for: " + currentInfo.getProjectName());
 			}
 		}
-		
+
 		String allDescriptions = createAllInServicesDiagramString(umlDescriptions, infoObjects);
 
-		List<File> diagramFiles = new ArrayList<>();
 		for (Entry<String, String> descriptionEntry : umlDescriptions.entrySet()) {
-
-			if (visualize) {
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "component"), ".png", targetFolder));
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "component"), ".svg", targetFolder));
-			}
-			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-					generateDiagramName(descriptionEntry, "component"), ".txt", targetFolder));
-
+			fileNameToContent.put(generateDiagramName(descriptionEntry, "components") + ".txt",
+					descriptionEntry.getValue());
 		}
-		
-		if (visualize) {
-			diagramFiles.addAll(output.writeToFile(allDescriptions, "All_components_Diagram", ".png", targetFolder));
-			diagramFiles.addAll(output.writeToFile(allDescriptions, "All_components_Diagram", ".svg", targetFolder));
-		}
-		diagramFiles.addAll(output.writeToFile(allDescriptions, "All_components_PlantUML_Description", ".txt", targetFolder));
 
-		return diagramFiles;
+		fileNameToContent.put("all_components.txt", allDescriptions);
+
+		return fileNameToContent;
 	}
 
-	private String createAllInServicesDiagramString(Map<String, String> umlDescriptions, List<CollectedMavenInfoObject> infoObjects) {
+	private String createAllInServicesDiagramString(Map<String, String> umlDescriptions,
+			List<CollectedMavenInfoObject> infoObjects) {
 		String description = BEGIN_DIAGRAM;
-		
+
 		for (Entry<String, String> currentEntry : umlDescriptions.entrySet()) {
 			String innerPart = removePlantUMLPart(currentEntry.getValue());
-			
+
 			description += "package \"" + tagToServiceName(currentEntry.getKey(), infoObjects) + "\" { \n";
 			description += innerPart;
 			description += "}\n\n";
-			
+
 		}
 		description += END_DIAGRAM;
-		
+
 		return description;
 	}
-	
 
 	private String removePlantUMLPart(String description) {
 		return description.replace(BEGIN_DIAGRAM, "").replace(END_DIAGRAM, "");
@@ -356,9 +367,9 @@ public class PlantUMLDiagramGenerator {
 //		return mapping;
 //	}
 
-	public List<File> createSystemDiagram(List<CollectedMavenInfoObject> infoObjects, File targetFolder,
-			boolean visualize, DataOutputToFile output) {
+	public Map<String, String> createSystemDiagram(List<CollectedMavenInfoObject> infoObjects) {
 		System.out.println("---- creating system diagram ----");
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		Map<String, List<String>> sysToSubSys = new HashMap<>();
 		for (CollectedMavenInfoObject currentInfo : infoObjects) {
@@ -378,23 +389,9 @@ public class PlantUMLDiagramGenerator {
 		}
 		src += END_DIAGRAM;
 
-		Map<String, String> map = new HashMap<>();
-		map.put("All", src);
+		fileNameToContent.put("systems" + ".txt", src);
 
-		List<File> diagramFiles = new ArrayList<>();
-		for (Entry<String, String> descriptionEntry : map.entrySet()) {
-			if (visualize) {
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "system"), ".png", targetFolder));
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "system"), ".svg", targetFolder));
-			}
-			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-					generateDiagramNameForDescription(descriptionEntry, "system"), ".txt", targetFolder));
-
-		}
-
-		return diagramFiles;
+		return fileNameToContent;
 
 	}
 
@@ -410,9 +407,10 @@ public class PlantUMLDiagramGenerator {
 		return diagramDescription;
 	}
 
-	public List<File> createSystemMicroserviceDiagram(List<CollectedMavenInfoObject> infoObjects,
-			List<Dependency> serviceDependencies, File targetFolder, boolean visualize, DataOutputToFile output) {
+	public Map<String, String> createServiceDiagram(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies) {
 		System.out.println("---- creating diagrams for microservices in system ----");
+		Map<String, String> fileNameToContent = new HashMap<>();
 
 		List<SystemDescriptionModel> systems = new ArrayList<>();
 		for (CollectedMavenInfoObject currentInfo : infoObjects) {
@@ -450,23 +448,9 @@ public class PlantUMLDiagramGenerator {
 
 		src += END_DIAGRAM;
 
-		Map<String, String> map = new HashMap<>();
-		map.put("All", src);
+		fileNameToContent.put("services" + ".txt", src);
 
-		List<File> diagramFiles = new ArrayList<>();
-		for (Entry<String, String> descriptionEntry : map.entrySet()) {
-			if (visualize) {
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "microservice_system"), ".png", targetFolder));
-				diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-						generateDiagramName(descriptionEntry, "microservice_system"), ".svg", targetFolder));
-			}
-			diagramFiles.addAll(output.writeToFile(descriptionEntry.getValue(),
-					generateDiagramNameForDescription(descriptionEntry, "microservice_system"), ".txt", targetFolder));
-
-		}
-
-		return diagramFiles;
+		return fileNameToContent;
 
 	}
 
@@ -491,11 +475,12 @@ public class PlantUMLDiagramGenerator {
 		if (serviceDependencies == null || serviceDependencies.isEmpty()) {
 			Log.info("No dependencies between services found");
 			return diagramDescriptionServiceDependencies;
-		} 
+		}
 
 		for (Dependency dependency : serviceDependencies) {
 			diagramDescriptionServiceDependencies += "\"" + dependency.getService() + "\"" + "-->" + "\""
-					+ dependency.getDependsOn() + "\" : \"" + dependency.getMethod() + " : " + dependency.getPath() + "\"\n";
+					+ dependency.getDependsOn() + "\" : \"" + dependency.getMethod() + " : " + dependency.getPath()
+					+ "\"\n";
 		}
 
 		return diagramDescriptionServiceDependencies;
@@ -527,22 +512,18 @@ public class PlantUMLDiagramGenerator {
 //	}
 
 	private String generateDiagramName(Entry<String, String> descriptionEntry, String diagramType) {
-		return descriptionEntry.getKey() + "_" + diagramType + "_Diagram";
+		return descriptionEntry.getKey() + "_plantUML_" + diagramType;
 	}
 
-	private String generateDiagramNameForDescription(Entry<String, String> descriptionEntry, String diagramType) {
-		return descriptionEntry.getKey() + "_" + diagramType + "_PlantUML_Description";
-	}
-	
-	private String tagToServiceName (String tag, List<CollectedMavenInfoObject> infoObjects) {
+	private String tagToServiceName(String tag, List<CollectedMavenInfoObject> infoObjects) {
 		String name = tag;
-		
+
 		for (CollectedMavenInfoObject info : infoObjects) {
 			if (info.getTag().equals(tag)) {
 				return info.getProjectName();
 			}
 		}
-		
-		return name;		
+
+		return name;
 	}
 }

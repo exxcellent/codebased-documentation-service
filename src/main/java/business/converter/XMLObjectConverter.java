@@ -1,12 +1,15 @@
 package business.converter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.google.common.collect.Lists;
 
+import business.model.Dependency;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.maven.ComponentInfoObject;
 import collectors.models.maven.ModuleInfoObject;
@@ -52,9 +55,45 @@ public class XMLObjectConverter {
 	 * @param systems     systems to add dependencies to.
 	 * @return the systems with the dependencies added.
 	 */
-	public List<System> addSystemDependencies(List<CollectedMavenInfoObject> infoObjects, List<System> systems) {
+	public List<System> addSystemDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<System> systems) {
 		// TODO: implement when infoObject contains this info.
+		Map<String, String> serviceToSystem = mapServiceToSystem(infoObjects);
+
+		for (Dependency serviceDependency : serviceDependencies) {
+			String currentSystem = serviceToSystem.get(serviceDependency.getService());
+			String systemOfDependsOn = serviceToSystem.get(serviceDependency.getDependsOn());
+			if (systemOfDependsOn == null) {
+				systemOfDependsOn = "ext";
+			}
+			if (!currentSystem.equalsIgnoreCase(systemOfDependsOn)) {
+				for (System system : systems) {
+					if (system.getName().equals(currentSystem)) {
+						if (system.getSystemDependencies() == null) {
+							Dependencies dependencies = new Dependencies();
+							dependencies.getDependency().add(systemOfDependsOn);
+							system.setSystemDependencies(dependencies);
+						} else {
+							if (!system.getSystemDependencies().getDependency().contains(systemOfDependsOn)) {
+								system.getSystemDependencies().getDependency().add(systemOfDependsOn);
+							}
+						}
+					}
+				}
+			}
+		}
+
 		return systems;
+	}
+
+	private Map<String, String> mapServiceToSystem(List<CollectedMavenInfoObject> infoObjects) {
+		Map<String, String> serviceToSystem = new HashMap<>();
+
+		for (CollectedMavenInfoObject infoO : infoObjects) {
+			serviceToSystem.put(infoO.getProjectName(), infoO.getSystem());
+		}
+
+		return serviceToSystem;
 	}
 
 	/**
@@ -109,9 +148,45 @@ public class XMLObjectConverter {
 	 * @return the subsystems with the dependencies added.
 	 */
 	public List<Subsystem> addSubystemDependencies(List<CollectedMavenInfoObject> infoObjects,
-			List<Subsystem> subsystems) {
-		// TODO: implement when infoObject contains this info.
+			List<Dependency> serviceDependencies, List<Subsystem> subsystems) {
+
+		Map<String, String> serviceToSubsystem = mapServiceToSubsystem(infoObjects);
+
+		for (Dependency serviceDependency : serviceDependencies) {
+			String currentSubsystem = serviceToSubsystem.get(serviceDependency.getService());
+			String subsystemOfDependsOn = serviceToSubsystem.get(serviceDependency.getDependsOn());
+			if (subsystemOfDependsOn == null) {
+				subsystemOfDependsOn = "ext";
+			}
+
+			if (!currentSubsystem.equalsIgnoreCase(subsystemOfDependsOn)) {
+				for (Subsystem subsystem : subsystems) {
+					if (subsystem.getName().equals(currentSubsystem)) {
+						if (subsystem.getSubsystemDependencies() == null) {
+							Dependencies dependencies = new Dependencies();
+							dependencies.getDependency().add(subsystemOfDependsOn);
+							subsystem.setSubsystemDependencies(dependencies);
+						} else {
+							if (!subsystem.getSubsystemDependencies().getDependency().contains(subsystemOfDependsOn)) {
+								subsystem.getSubsystemDependencies().getDependency().add(subsystemOfDependsOn);
+							}
+						}
+					}
+				}
+			}
+		}
+
 		return subsystems;
+	}
+
+	private Map<String, String> mapServiceToSubsystem(List<CollectedMavenInfoObject> infoObjects) {
+		Map<String, String> serviceToSubsystem = new HashMap<>();
+
+		for (CollectedMavenInfoObject infoO : infoObjects) {
+			serviceToSubsystem.put(infoO.getProjectName(), infoO.getSubsystem());
+		}
+
+		return serviceToSubsystem;
 	}
 
 	/**
@@ -149,7 +224,8 @@ public class XMLObjectConverter {
 	 *                         for each of the services.
 	 * @return List of found Systems.
 	 */
-	public List<Service> getServices(List<CollectedMavenInfoObject> infoObjects, boolean withDependencies) {
+	public List<Service> getServices(List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies,
+			boolean withDependencies) {
 		Set<Service> services = new HashSet<>();
 
 		for (CollectedMavenInfoObject infoObject : infoObjects) {
@@ -157,7 +233,18 @@ public class XMLObjectConverter {
 			service.setName(infoObject.getProjectName());
 
 			if (withDependencies) {
-				// TODO: set dependencies.
+				for (Dependency dep : serviceDependencies) {
+					if (dep.getService().equals(infoObject.getProjectName())) {
+						if (service.getServiceDependencies() == null) {
+							Dependencies dependencies = new Dependencies();
+							dependencies.getDependency().add(dep.getDependsOn());
+							service.setServiceDependencies(dependencies);
+						}
+						if (service.getServiceDependencies().getDependency().contains(dep.getDependsOn())) {
+							service.getServiceDependencies().getDependency().add(dep.getDependsOn());
+						}
+					}
+				}
 			}
 
 			services.add(service);
@@ -173,8 +260,25 @@ public class XMLObjectConverter {
 	 * @param services    services to add dependencies to.
 	 * @return the systems with the dependencies added.
 	 */
-	public List<Service> addServiceDependencies(List<CollectedMavenInfoObject> infoObjects, List<Service> services) {
-		// TODO: implement when infoObject contains this info.
+	public List<Service> addServiceDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<Service> services) {
+
+		for (Service currentService : services) {
+			for (Dependency dependency : serviceDependencies) {
+				if (currentService.getName().equals(dependency.getService())) {
+					if (currentService.getServiceDependencies() == null) {
+						Dependencies dep = new Dependencies();
+						dep.getDependency().add(dependency.getDependsOn());
+						currentService.setServiceDependencies(dep);
+					} else {
+						if (!currentService.getServiceDependencies().getDependency()
+								.contains(dependency.getDependsOn())) {
+							currentService.getServiceDependencies().getDependency().add(dependency.getDependsOn());
+						}
+					}
+				}
+			}
+		}
 		return services;
 	}
 
