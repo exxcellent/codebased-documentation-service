@@ -13,7 +13,7 @@ import business.model.Dependency;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.maven.ComponentInfoObject;
 import collectors.models.maven.ModuleInfoObject;
-import collectors.models.maven.PackageInfoObject;
+import collectors.models.maven.ModuleToComponentInfoObject;
 import data.model.xml.Component;
 import data.model.xml.Dependencies;
 import data.model.xml.Module;
@@ -345,8 +345,8 @@ public class XMLObjectConverter {
 			Set<Component> components = new HashSet<>();
 			for (CollectedMavenInfoObject infoObject : infoObjects) {
 				if (infoObject.getProjectName().equals(service.getName())) {
-					for (ComponentInfoObject componentsInfo : infoObject.getComponents()) {
-						for (PackageInfoObject pkgInfo : componentsInfo.getComponents()) {
+					for (ModuleToComponentInfoObject componentsInfo : infoObject.getComponents()) {
+						for (ComponentInfoObject pkgInfo : componentsInfo.getComponents()) {
 							Component component = new Component();
 							component.setName(pkgInfo.getPackageName());
 
@@ -435,10 +435,10 @@ public class XMLObjectConverter {
 		List<Component> allComponents = new ArrayList<>();
 
 		for (CollectedMavenInfoObject infoObject : infoObjects) {
-			for (ComponentInfoObject componentsInfo : infoObject.getComponents()) {
+			for (ModuleToComponentInfoObject componentsInfo : infoObject.getComponents()) {
 				Module currentMod = getModule(modules, componentsInfo.getModuleName());
 
-				for (PackageInfoObject pkgInfo : componentsInfo.getComponents()) {
+				for (ComponentInfoObject pkgInfo : componentsInfo.getComponents()) {
 					Component component = new Component();
 					component.setName(pkgInfo.getPackageName());
 
@@ -512,8 +512,8 @@ public class XMLObjectConverter {
 		Set<Component> components = new HashSet<>();
 
 		for (CollectedMavenInfoObject infoObject : infoObjects) {
-			for (ComponentInfoObject componentsInfo : infoObject.getComponents()) {
-				for (PackageInfoObject pkgInfo : componentsInfo.getComponents()) {
+			for (ModuleToComponentInfoObject componentsInfo : infoObject.getComponents()) {
+				for (ComponentInfoObject pkgInfo : componentsInfo.getComponents()) {
 					Component component = new Component();
 					component.setName(pkgInfo.getPackageName());
 
@@ -540,8 +540,8 @@ public class XMLObjectConverter {
 	public List<Component> addComponentDependencies(List<CollectedMavenInfoObject> infoObjects,
 			List<Component> components) {
 		for (CollectedMavenInfoObject infoObject : infoObjects) {
-			for (ComponentInfoObject componentsInfo : infoObject.getComponents()) {
-				for (PackageInfoObject pkgInfo : componentsInfo.getComponents()) {
+			for (ModuleToComponentInfoObject componentsInfo : infoObject.getComponents()) {
+				for (ComponentInfoObject pkgInfo : componentsInfo.getComponents()) {
 					if (pkgInfo.getDependsOn() != null && !pkgInfo.getDependsOn().isEmpty()) {
 						Component currentComponent = getComponent(components, pkgInfo.getPackageName());
 						Dependencies deps = new Dependencies();

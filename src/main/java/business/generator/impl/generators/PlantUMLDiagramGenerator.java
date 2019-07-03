@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.google.common.collect.Lists;
-
 import annotation.ConsumesAPI;
 import business.converter.InfoObjectConverter;
 import business.generator.impl.connectors.ServiceConnector;
@@ -17,10 +15,10 @@ import business.model.SystemDescriptionModel;
 import collectors.models.InfoObject;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.maven.ComponentInfoObject;
-import collectors.models.maven.PackageInfoObject;
+import collectors.models.maven.ModuleInfoObject;
+import collectors.models.maven.ModuleToComponentInfoObject;
 import collectors.models.restapi.CollectedAPIInfoObject;
 import data.file.FileReader;
-import data.file.FileWriter;
 import data.file.PlantUMLDiagramWriter;
 import data.interfaces.DataOutputToFile;
 import mojos.DocumentationMojo;
@@ -192,17 +190,28 @@ public class PlantUMLDiagramGenerator {
 		Map<String, List<String>> moduleDependencies = infoObject.getModuleDependencies();
 
 		for (String module : moduleDependencies.keySet()) {
-			diagramString += "package \"" + module + "\" {}\n";
+			diagramString += "package \"" + getModuleNameFromTag(infoObject, module) + "\" {}\n";
 		}
 		diagramString += "\n";
 
 		for (Entry<String, List<String>> entry : moduleDependencies.entrySet()) {
 			for (String dep : entry.getValue()) {
-				diagramString += "\"" + entry.getKey() + "\"" + " --> " + "\"" + dep + "\"" + "\n";
+				diagramString += "\"" + getModuleNameFromTag(infoObject, entry.getKey()) + "\"" + " --> " + "\"" + getModuleNameFromTag(infoObject, dep) + "\"" + "\n";
 			}
 		}
 
 		return diagramString;
+	}
+	
+	private String getModuleNameFromTag(CollectedMavenInfoObject infoObject, String tag) {
+		
+		for(ModuleInfoObject moduleInfoObject : infoObject.getModules()) {
+			if (moduleInfoObject.getTag().equalsIgnoreCase(tag)) {
+				return moduleInfoObject.getModuleName();
+			}
+		}
+		
+		return tag;
 	}
 
 	/**
@@ -287,14 +296,14 @@ public class PlantUMLDiagramGenerator {
 	private String createComponentDiagramString(CollectedMavenInfoObject infoObject) {
 		String diagramString = "";
 
-		List<ComponentInfoObject> componentList = infoObject.getComponents();
+		List<ModuleToComponentInfoObject> componentList = infoObject.getComponents();
 
 		/* create packages & components */
-		for (ComponentInfoObject moduleComponent : componentList) {
+		for (ModuleToComponentInfoObject moduleComponent : componentList) {
 
 			diagramString += "package " + "\"" + moduleComponent.getModuleName() + "\" { \n";
 
-			for (PackageInfoObject info : moduleComponent.getComponents()) {
+			for (ComponentInfoObject info : moduleComponent.getComponents()) {
 				diagramString += "[" + "\"" + info.getPackageName() + "\"] \n";
 			}
 
@@ -304,8 +313,8 @@ public class PlantUMLDiagramGenerator {
 		diagramString += "\n";
 
 		/* create dependencies between components */
-		for (ComponentInfoObject moduleComponent : componentList) {
-			for (PackageInfoObject info : moduleComponent.getComponents()) {
+		for (ModuleToComponentInfoObject moduleComponent : componentList) {
+			for (ComponentInfoObject info : moduleComponent.getComponents()) {
 				for (String dependency : info.getDependsOn()) {
 					diagramString += "[\"" + info.getPackageName() + "\"]" + " ..> " + "[\"" + dependency
 							+ "\"] : use \n";
@@ -378,8 +387,8 @@ public class PlantUMLDiagramGenerator {
 		List<String> names = new ArrayList<>();
 
 		for (CollectedMavenInfoObject info : infoObjects) {
-			for (ComponentInfoObject cInfo : info.getComponents()) {
-				for (PackageInfoObject pkgInfo : cInfo.getComponents()) {
+			for (ModuleToComponentInfoObject cInfo : info.getComponents()) {
+				for (ComponentInfoObject pkgInfo : cInfo.getComponents()) {
 					names.add(pkgInfo.getPackageName());
 				}
 			}

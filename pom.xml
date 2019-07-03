@@ -82,9 +82,9 @@
 				<configuration>
 					<documentLocation>C:\Users\gmittmann\Documents\Arbeit</documentLocation>
 					<packageWhiteList>
-						<application>2</application>
-						<business>2</business>
-						<data>2</data>
+						<application>0</application>
+						<business>0</business>
+						<data>0</data>
 					</packageWhiteList>
 					<system>Codebased</system>
 					<subsystem>doku</subsystem>
