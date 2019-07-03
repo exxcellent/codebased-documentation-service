@@ -444,7 +444,7 @@ public class XMLObjectConverter {
 
 					if (withDependencies) {
 						Dependencies deps = new Dependencies();
-						deps.getDependency().addAll(pkgInfo.getDependsOn());
+						deps.getDependency().addAll(pkgInfo.getDependsOn());						
 						component.setComponentDependencies(deps);
 					}
 
@@ -456,6 +456,47 @@ public class XMLObjectConverter {
 
 		return allComponents;
 	}
+	
+	public List<Component> addExternalComponentDependencies(List<Component> components, List<Dependency> serviceDependencies) {
+		
+		for (Component component : components) {
+			String pkgName = component.getName();
+			for (Dependency serviceDep : serviceDependencies) {
+				if (serviceDep.getServicePackage().startsWith(pkgName)) {
+					String dependencyComponentName = getComponentByPackageName(components, serviceDep.getDependsOnPackage());
+					if (!component.getComponentDependencies().getDependency().contains(dependencyComponentName)) {
+						component.getComponentDependencies().getDependency().add(dependencyComponentName);
+					}
+				}
+			}
+		}
+		
+		return null;
+	}
+	
+	private String getComponentByPackageName(List<Component> components, String packageName) {
+		List<String> matchingComponents = new ArrayList<>();
+		for (Component component : components) {
+			if (packageName.startsWith(component.getName())) {
+				matchingComponents.add(component.getName());
+			}
+		}
+		if (!matchingComponents.isEmpty()) {
+			return getLongest(matchingComponents);
+		}
+		return "EXTERN";
+	}
+	
+	private String getLongest(List<String> allMatches) {
+		String longest = "";
+		for (String match : allMatches) {
+			if (match.length() > longest.length()) {
+				longest = match;
+			}
+		}
+		return longest;
+	}
+
 
 	/**
 	 * Gets all components defined in the given InfoObjects as generated Component

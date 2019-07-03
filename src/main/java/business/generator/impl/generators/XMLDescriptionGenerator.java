@@ -21,6 +21,7 @@ import data.file.FileReader;
 import data.file.JaxbStringMarshaller;
 import data.interfaces.DataOutput;
 import data.interfaces.DataOutputToFile;
+import data.model.xml.Component;
 import data.model.xml.Module;
 import data.model.xml.ObjectFactory;
 import data.model.xml.Service;
@@ -50,7 +51,7 @@ public class XMLDescriptionGenerator {
 			serviceDependencies = connector.connectServices(apiInfoObjects);
 		}
 
-		Map<String, String> cDD = generateComponentDependencyDescription(infoObjects);
+		Map<String, String> cDD = generateComponentDependencyDescription(infoObjects, serviceDependencies);
 		for (Entry<String, String> entry : cDD.entrySet()) {
 			diagramFiles.addAll(output.writeToFile(entry.getValue(), entry.getKey().split("\\.")[0],
 					entry.getKey().split("\\.")[1], targetFolder));
@@ -90,7 +91,7 @@ public class XMLDescriptionGenerator {
 		}
 
 		fileNameToContent.putAll(generateModuleDependencyDescription(infoObjects));
-		fileNameToContent.putAll(generateComponentDependencyDescription(infoObjects));
+		fileNameToContent.putAll(generateComponentDependencyDescription(infoObjects, serviceDependencies));
 		fileNameToContent.putAll(generateSystemDescription(infoObjects, serviceDependencies));
 		fileNameToContent.putAll(generateServiceDependencyDescription(infoObjects, serviceDependencies));
 
@@ -144,7 +145,7 @@ public class XMLDescriptionGenerator {
 		return fileNameToContent;
 	}
 
-	public Map<String, String> generateComponentDependencyDescription(List<CollectedMavenInfoObject> infoObjects) {
+	public Map<String, String> generateComponentDependencyDescription(List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies) {
 		Map<String, String> fileNameToContent = new HashMap<>();
 
 		XMLObjectConverter creator = new XMLObjectConverter();
@@ -152,21 +153,10 @@ public class XMLDescriptionGenerator {
 		List<Subsystem> subsys = creator.addSubsystems(infoObjects, systems);
 		List<Service> services = creator.addServices(infoObjects, subsys);
 		List<Module> modules = creator.addModules(infoObjects, services, false);
-		creator.addComponents(infoObjects, modules, true);
+		List<Component> components = creator.addComponents(infoObjects, modules, true);
 
-		Systems sys = new Systems();
-		sys.getSystem().addAll(systems);
+		
 		ObjectFactory factory = new ObjectFactory();
-
-		try {
-			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
-			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-			String sysString = marshaller.marshall(sys);
-			fileNameToContent.put("all_components.xml", sysString);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
 		try {
 			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Service.class);
 			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
@@ -176,6 +166,18 @@ public class XMLDescriptionGenerator {
 				String name = serviceNameToFileName(service, "components");
 				fileNameToContent.put(name + ".xml", serviceString);
 			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		Systems sys = new Systems();
+		sys.getSystem().addAll(systems);
+		creator.addExternalComponentDependencies(components, serviceDependencies);		
+		try {
+			JaxbStringMarshaller marshaller = new JaxbStringMarshaller(data.model.xml.Systems.class);
+			marshaller.setMarshallerProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			String sysString = marshaller.marshall(sys);
+			fileNameToContent.put("all_components.xml", sysString);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

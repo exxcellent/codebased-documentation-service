@@ -4,6 +4,8 @@ public class Dependency {
 
 	private String service;
 	private String dependsOn;
+	private String servicePackage;
+	private String dependsOnPackage;
 	private String path;
 	private String method;
 	private boolean ambiguous;
@@ -62,6 +64,22 @@ public class Dependency {
 			return true;
 		}
 		return false;
+	}
+
+	public String getServicePackage() {
+		return servicePackage;
+	}
+
+	public void setServicePackage(String servicePackage) {
+		this.servicePackage = servicePackage;
+	}
+
+	public String getDependsOnPackage() {
+		return dependsOnPackage;
+	}
+
+	public void setDependsOnPackage(String dependsOnPackage) {
+		this.dependsOnPackage = dependsOnPackage;
 	}
 
 }

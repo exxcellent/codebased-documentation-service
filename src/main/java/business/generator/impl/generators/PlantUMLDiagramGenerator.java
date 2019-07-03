@@ -62,12 +62,12 @@ public class PlantUMLDiagramGenerator {
 		}
 
 		// Create diagrams
-		Map<String, String> modules = createModuleDiagram(infoObjects);
+		Map<String, String> modules = createModuleDiagram(infoObjects, serviceDependencies);
 		for (Entry<String, String> moduleEntry : modules.entrySet()) {
 			diagramFiles.addAll(output.writeToFile(moduleEntry.getValue(), moduleEntry.getKey().split("\\.")[0],
 					moduleEntry.getKey().split("\\.")[1], targetFolder));
 		}
-		Map<String, String> components = createComponentDiagram(infoObjects);
+		Map<String, String> components = createComponentDiagram(infoObjects, serviceDependencies);
 		for (Entry<String, String> componentEntry : components.entrySet()) {
 			diagramFiles.addAll(output.writeToFile(componentEntry.getValue(), componentEntry.getKey().split("\\.")[0],
 					componentEntry.getKey().split("\\.")[1], targetFolder));
@@ -112,10 +112,10 @@ public class PlantUMLDiagramGenerator {
 		}
 
 		// Create diagrams
-		Map<String, String> modules = createModuleDiagram(infoObjects);
+		Map<String, String> modules = createModuleDiagram(infoObjects, serviceDependencies);
 		diagramStrings.putAll(modules);
 
-		Map<String, String> components = createComponentDiagram(infoObjects);
+		Map<String, String> components = createComponentDiagram(infoObjects, serviceDependencies);
 		diagramStrings.putAll(components);
 
 		Map<String, String> systems = createSystemDiagram(infoObjects);
@@ -147,7 +147,8 @@ public class PlantUMLDiagramGenerator {
 	 *                    created.
 	 * @return Map containing mapping from name of the file to content.
 	 */
-	public Map<String, String> createModuleDiagram(List<CollectedMavenInfoObject> infoObjects) {
+	public Map<String, String> createModuleDiagram(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies) {
 		System.out.println("---- creating diagrams for modules ----");
 		Map<String, String> fileNameToContent = new HashMap<>();
 
@@ -171,7 +172,7 @@ public class PlantUMLDiagramGenerator {
 					descriptionEntry.getValue());
 		}
 
-		String allModules = createAllInServicesDiagramString(umlDescriptions, infoObjects);
+		String allModules = createAllInServicesDiagramString(umlDescriptions, infoObjects, serviceDependencies, false);
 		fileNameToContent.put("all_modules.txt", allModules);
 
 		return fileNameToContent;
@@ -212,7 +213,8 @@ public class PlantUMLDiagramGenerator {
 	 *                    created.
 	 * @return Map containing mapping from name of the file to content.
 	 */
-	public Map<String, String> createComponentDiagram(List<CollectedMavenInfoObject> infoObjects) {
+	public Map<String, String> createComponentDiagram(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies) {
 		System.out.println("---- creating diagrams for components ----");
 
 		Map<String, String> fileNameToContent = new HashMap<>();
@@ -232,7 +234,8 @@ public class PlantUMLDiagramGenerator {
 			}
 		}
 
-		String allDescriptions = createAllInServicesDiagramString(umlDescriptions, infoObjects);
+		String allDescriptions = createAllInServicesDiagramString(umlDescriptions, infoObjects, serviceDependencies,
+				true);
 
 		for (Entry<String, String> descriptionEntry : umlDescriptions.entrySet()) {
 			fileNameToContent.put(generateDiagramName(descriptionEntry, "components") + ".txt",
@@ -245,7 +248,8 @@ public class PlantUMLDiagramGenerator {
 	}
 
 	private String createAllInServicesDiagramString(Map<String, String> umlDescriptions,
-			List<CollectedMavenInfoObject> infoObjects) {
+			List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies,
+			boolean componentExternalDeps) {
 		String description = BEGIN_DIAGRAM;
 
 		for (Entry<String, String> currentEntry : umlDescriptions.entrySet()) {
@@ -255,6 +259,10 @@ public class PlantUMLDiagramGenerator {
 			description += innerPart;
 			description += "}\n\n";
 
+		}
+
+		if (componentExternalDeps) {
+			description += createExternalComponentDependenciesString(infoObjects, serviceDependencies);
 		}
 		description += END_DIAGRAM;
 
@@ -283,14 +291,11 @@ public class PlantUMLDiagramGenerator {
 
 		/* create packages & components */
 		for (ComponentInfoObject moduleComponent : componentList) {
-//			Map<String, List<String>> packageHierarchy = sortInnerPackages(moduleComponent);
 
 			diagramString += "package " + "\"" + moduleComponent.getModuleName() + "\" { \n";
 
 			for (PackageInfoObject info : moduleComponent.getComponents()) {
-//				if (!isBeingInherited(packageHierarchy, info.getPackageName())) {
 				diagramString += "[" + "\"" + info.getPackageName() + "\"] \n";
-//				}
 			}
 
 			diagramString += "}\n\n";
@@ -300,23 +305,12 @@ public class PlantUMLDiagramGenerator {
 
 		/* create dependencies between components */
 		for (ComponentInfoObject moduleComponent : componentList) {
-//			Map<String, List<String>> packageHierarchy = sortInnerPackages(moduleComponent);
-//			Map<String, PackageInfoObject> pkgMapping = mapPkgInfoToName(moduleComponent);
 			for (PackageInfoObject info : moduleComponent.getComponents()) {
 				for (String dependency : info.getDependsOn()) {
 					diagramString += "[\"" + info.getPackageName() + "\"]" + " ..> " + "[\"" + dependency
 							+ "\"] : use \n";
 				}
-//				if (packageHierarchy.containsKey(info.getPackageName())) {
-//					for (String inheritFrom : packageHierarchy.get(info.getPackageName())) {
-//						PackageInfoObject inheritPackage = pkgMapping.get(inheritFrom);
-//
-//						for (String dependency : inheritPackage.getDependsOn()) {
-//							diagramString += "[\"" + info.getPackageName() + "\"]" + " ..> " + "[\"" + dependency
-//									+ "\"] : use \n";
-//						}
-//					}
-//				}
+
 			}
 
 			diagramString += "\n";
@@ -325,47 +319,74 @@ public class PlantUMLDiagramGenerator {
 		return diagramString;
 	}
 
-//	private Map<String, List<String>> sortInnerPackages(ComponentInfoObject infoObject) {
-//		List<String> packages = new ArrayList<>();
-//		for (PackageInfoObject pkgInfo : infoObject.getComponents()) {
-//			packages.add(pkgInfo.getPackageName());
-//		}
-//		Map<String, List<String>> packageHierarchy = new HashMap<>();
-//		for (PackageInfoObject pkgInfo : infoObject.getComponents()) {
-//			for (String otherName : packages) {
-//				String currentName = pkgInfo.getPackageName();
-//				if (currentName.startsWith(otherName)) {
-//					if (packageHierarchy.containsKey(currentName)) {
-//						packageHierarchy.get(currentName).add(otherName);
-//					} else {
-//						packageHierarchy.put(currentName, Lists.newArrayList(otherName));
-//					}
-//				}
-//			}
-//		}
-//		return packageHierarchy;
-//	}
-//	
-//	private boolean isBeingInherited(Map<String, List<String>> pkgHierarchy, String name) {
-//		
-//		for (List<String> currentList : pkgHierarchy.values()) {
-//			if (currentList.contains(name)) {
-//				return true;
-//			}
-//		}
-//		
-//		return false;
-//	}
-//
-//	private Map<String, PackageInfoObject> mapPkgInfoToName(ComponentInfoObject baseInfo) {
-//		Map<String, PackageInfoObject> mapping = new HashMap<>();
-//
-//		for (PackageInfoObject pkgInfo : baseInfo.getComponents()) {
-//			mapping.put(pkgInfo.getPackageName(), pkgInfo);
-//		}
-//
-//		return mapping;
-//	}
+	private String createExternalComponentDependenciesString(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies) {
+
+		if (serviceDependencies == null || serviceDependencies.isEmpty()) {
+			return "";
+		}
+		List<String> availableComponents = availableComponents(infoObjects);
+		String dependencies = "";
+
+		Map<String, String> addedDependencies = new HashMap<>();
+		for (Dependency serviceDependency : serviceDependencies) {
+			String dependencyPackageName = serviceDependency.getServicePackage();
+
+			for (String component : availableComponents) {
+				if (dependencyPackageName.startsWith(component)) {
+					
+					String dependOn = getComponentByPackage(availableComponents,
+							serviceDependency.getDependsOnPackage());
+
+					if (addedDependencies.get(component) == null || !addedDependencies.get(component).equals(dependOn)) {
+						addedDependencies.put(component, dependOn);
+
+						dependencies += "[\"" + component + "\"]" + " ..> " + "[\"" + dependOn + "\"] : call \n";
+					}
+				}
+			}
+
+		}
+
+		return dependencies;
+	}
+
+	private String getLongest(List<String> allMatches) {
+		String longest = "";
+		for (String match : allMatches) {
+			if (match.length() > longest.length()) {
+				longest = match;
+			}
+		}
+		return longest;
+	}
+
+	private String getComponentByPackage(List<String> availableComponents, String dependsOnPackage) {
+		List<String> allMatches = new ArrayList<>();
+		for (String component : availableComponents) {
+			if (dependsOnPackage.startsWith(component)) {
+				allMatches.add(component);
+			}
+		}
+		if (!allMatches.isEmpty()) {
+			return getLongest(allMatches);
+		}
+		return "EXTERN";
+	}
+
+	private List<String> availableComponents(List<CollectedMavenInfoObject> infoObjects) {
+		List<String> names = new ArrayList<>();
+
+		for (CollectedMavenInfoObject info : infoObjects) {
+			for (ComponentInfoObject cInfo : info.getComponents()) {
+				for (PackageInfoObject pkgInfo : cInfo.getComponents()) {
+					names.add(pkgInfo.getPackageName());
+				}
+			}
+		}
+
+		return names;
+	}
 
 	public Map<String, String> createSystemDiagram(List<CollectedMavenInfoObject> infoObjects) {
 		System.out.println("---- creating system diagram ----");
@@ -486,31 +507,6 @@ public class PlantUMLDiagramGenerator {
 		return diagramDescriptionServiceDependencies;
 	}
 
-//	public List<File> createAllInfoComponentDiagram(SystemDescriptionModel systemdescription,
-//			List<CollectedMavenInfoObject> infoObjects, File targetFolder, boolean visualize, DataOutputToFile output) {
-//		List<File> files = new ArrayList<>();
-//		
-//		Map<String, String> umlDescriptions = new HashMap<>();
-//		String src = "@startuml\n";
-//		src += "skinparam componentStyle uml2\n\n";
-//		List<String> services = new ArrayList<>();
-//		for (CollectedMavenInfoObject currentInfo : infoObjects) {
-//
-//			if (currentInfo.getModuleDependencies() != null) {
-//				src += "package \"" + currentInfo.getProjectName() + "\" {\n";;
-//				
-//				src += createComponentDiagramString(currentInfo);
-//
-//				umlDescriptions.put(currentInfo.getTag(), src);
-//			} else {
-//				System.out.println("No info about module dependencies found for: " + currentInfo.getProjectName());
-//			}
-//		}
-//		src += "@enduml\n";
-//
-//		return files;
-//	}
-
 	private String generateDiagramName(Entry<String, String> descriptionEntry, String diagramType) {
 		return descriptionEntry.getKey() + "_plantUML_" + diagramType;
 	}
@@ -520,10 +516,10 @@ public class PlantUMLDiagramGenerator {
 
 		for (CollectedMavenInfoObject info : infoObjects) {
 			if (info.getTag().equals(tag)) {
-				return info.getProjectName();
+				return "service: " + info.getProjectName();
 			}
 		}
 
-		return name;
+		return "service: " + name;
 	}
 }

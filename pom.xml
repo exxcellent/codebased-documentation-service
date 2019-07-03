@@ -5,7 +5,7 @@
 
 	<modelVersion>4.0.0</modelVersion>
 
-	<name>codebased documentation collector microservice</name>
+	<name>codebased documentation service</name>
 	<description>service for the codebased documentation</description>
 
 
@@ -74,6 +74,32 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			
+			<plugin>
+				<groupId>codebased-documentation</groupId>
+				<artifactId>cd-maven-plugin</artifactId>
+				<version>1.0.0</version>
+				<configuration>
+					<documentLocation>C:\Users\gmittmann\Documents\Arbeit</documentLocation>
+					<packageWhiteList>
+						<application>2</application>
+						<business>2</business>
+						<data>2</data>
+					</packageWhiteList>
+					<system>Codebased</system>
+					<subsystem>doku</subsystem>
+					<annotation>SPRING</annotation>
+				</configuration>
+				<executions>
+					<execution>
+						<phase>compile</phase>
+						<goals>
+							<goal>generateDoc</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			
 
 			<plugin>
 				<groupId>org.jvnet.jaxb2.maven2</groupId>
