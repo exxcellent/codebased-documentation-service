@@ -17,6 +17,7 @@ import collectors.models.maven.ModuleToComponentInfoObject;
 import data.model.xml.Component;
 import data.model.xml.Dependencies;
 import data.model.xml.Module;
+import data.model.xml.RestDependency;
 import data.model.xml.Service;
 import data.model.xml.Subsystem;
 import data.model.xml.System;
@@ -73,6 +74,54 @@ public class XMLObjectConverter {
 							Dependencies dependencies = new Dependencies();
 							dependencies.getDependency().add(systemOfDependsOn);
 							system.setSystemDependencies(dependencies);
+						} else {
+							if (!system.getSystemDependencies().getDependency().contains(systemOfDependsOn)) {
+								system.getSystemDependencies().getDependency().add(systemOfDependsOn);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return systems;
+	}
+
+	/**
+	 * Adds the dependencies between systems to the System objects.
+	 * 
+	 * @param infoObjects defining CollectedMavenInfoObject.
+	 * @param systems     systems to add dependencies to.
+	 * @return the systems with the dependencies added.
+	 */
+	public List<System> addSystemRestDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<System> systems, boolean asRestDependency) {
+
+		Map<String, String> serviceToSystem = mapServiceToSystem(infoObjects);
+
+		for (Dependency serviceDependency : serviceDependencies) {
+			String currentSystem = serviceToSystem.get(serviceDependency.getService());
+			String systemOfDependsOn = serviceToSystem.get(serviceDependency.getDependsOn());
+			String path = serviceDependency.getPath();
+			String method = serviceDependency.getMethod();
+			if (systemOfDependsOn == null) {
+				systemOfDependsOn = "ext";
+			}
+			if (!currentSystem.equalsIgnoreCase(systemOfDependsOn)) {
+				for (System system : systems) {
+					if (system.getName().equals(currentSystem)) {
+						if (system.getSystemDependencies() == null) {
+							Dependencies dependencies = new Dependencies();
+							system.setSystemDependencies(dependencies);
+						}
+
+						if (asRestDependency) {
+							RestDependency restDependency = new RestDependency();
+							restDependency.setMethod(method);
+							restDependency.setPath(path);
+							restDependency.setCalls(systemOfDependsOn);
+							system.getSystemDependencies().getRestDependency().add(restDependency);
+
 						} else {
 							if (!system.getSystemDependencies().getDependency().contains(systemOfDependsOn)) {
 								system.getSystemDependencies().getDependency().add(systemOfDependsOn);
@@ -171,6 +220,55 @@ public class XMLObjectConverter {
 								subsystem.getSubsystemDependencies().getDependency().add(subsystemOfDependsOn);
 							}
 						}
+					}
+				}
+			}
+		}
+
+		return subsystems;
+	}
+
+	/**
+	 * Adds the dependencies between subsystems to the Subsystem objects.
+	 * 
+	 * @param infoObjects defining CollectedMavenInfoObject.
+	 * @param subsystems  subsystems to add dependencies to.
+	 * @return the subsystems with the dependencies added.
+	 */
+	public List<Subsystem> addSubystemRestDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<Subsystem> subsystems, boolean asRestDependency) {
+
+		Map<String, String> serviceToSubsystem = mapServiceToSubsystem(infoObjects);
+
+		for (Dependency serviceDependency : serviceDependencies) {
+			String currentSubsystem = serviceToSubsystem.get(serviceDependency.getService());
+			String subsystemOfDependsOn = serviceToSubsystem.get(serviceDependency.getDependsOn());
+			String path = serviceDependency.getPath();
+			String method = serviceDependency.getMethod();
+			if (subsystemOfDependsOn == null) {
+				subsystemOfDependsOn = "ext";
+			}
+
+			if (!currentSubsystem.equalsIgnoreCase(subsystemOfDependsOn)) {
+				for (Subsystem subsystem : subsystems) {
+					if (subsystem.getName().equals(currentSubsystem)) {
+						if (subsystem.getSubsystemDependencies() == null) {
+							Dependencies dependencies = new Dependencies();
+							subsystem.setSubsystemDependencies(dependencies);
+						}
+
+						if (asRestDependency) {
+							RestDependency restDependency = new RestDependency();
+							restDependency.setMethod(method);
+							restDependency.setPath(path);
+							restDependency.setCalls(subsystemOfDependsOn);
+							subsystem.getSubsystemDependencies().getRestDependency().add(restDependency);
+						} else {
+							if (!subsystem.getSubsystemDependencies().getDependency().contains(subsystemOfDependsOn)) {
+								subsystem.getSubsystemDependencies().getDependency().add(subsystemOfDependsOn);
+							}
+						}
+
 					}
 				}
 			}
@@ -282,6 +380,37 @@ public class XMLObjectConverter {
 		return services;
 	}
 
+	public List<Service> addServiceRestDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<Service> services, boolean asRestDependency) {
+
+		for (Service currentService : services) {
+			for (Dependency dependency : serviceDependencies) {
+				String path = dependency.getPath();
+				String method = dependency.getMethod();
+				if (currentService.getName().equals(dependency.getService())) {
+					if (currentService.getServiceDependencies() == null) {
+						Dependencies dep = new Dependencies();
+						currentService.setServiceDependencies(dep);
+					}
+
+					if (asRestDependency) {
+						RestDependency restDependency = new RestDependency();
+						restDependency.setCalls(dependency.getDependsOn());
+						restDependency.setPath(path);
+						restDependency.setMethod(method);
+						currentService.getServiceDependencies().getRestDependency().add(restDependency);
+					} else {
+						if (!currentService.getServiceDependencies().getDependency().contains(dependency.getService())) {
+							currentService.getServiceDependencies().getDependency().add(dependency.getService());
+						}
+					}
+
+				}
+			}
+		}
+		return services;
+	}
+
 	/**
 	 * Add modules defined in the CollectedMavenInfoObjects to the given service.
 	 * 
@@ -309,7 +438,9 @@ public class XMLObjectConverter {
 
 						if (withDependencies) {
 							Dependencies deps = new Dependencies();
-							deps.getDependency().addAll(moduleInfo.getDependsOn());
+							for (String tag : moduleInfo.getDependsOn()) {
+								deps.getDependency().add(getModuleNameFromTag(infoObject, tag));
+							}
 							module.setModuleDependencies(deps);
 						}
 
@@ -322,6 +453,43 @@ public class XMLObjectConverter {
 		}
 		return allModules;
 	}
+//
+//	public List<Module> addModules(List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies,
+//			List<Service> services, boolean withRestDependencies) {
+//		
+//		List<Module> allModules = new ArrayList<>();
+//		for (Service service : services) {
+//			Set<Module> modules = new HashSet<>();
+//			for (CollectedMavenInfoObject infoObject : infoObjects) {
+//				if (infoObject.getProjectName().equals(service.getName())) {
+//					for (ModuleInfoObject moduleInfo : infoObject.getModules()) {
+//						Module module = new Module();
+//						module.setName(moduleInfo.getModuleName());
+//						module.setTag(moduleInfo.getTag());
+//
+//						if (withRestDependencies) {
+//							Dependencies deps = new Dependencies();
+//							for (String tag : moduleInfo.getDependsOn()) {
+//								deps.getDependency().add(getModuleNameFromTag(infoObject, tag));
+//							}
+//							module.setModuleDependencies(deps);
+//						}
+//
+//						modules.add(module);
+//					}
+//				}
+//			}
+//			service.getModule().addAll(modules);
+//			allModules.addAll(modules);
+//		}
+//		
+//		if (withRestDependencies) {
+//			for (Dependency dependency : serviceDependencies) {
+//				
+//			}
+//		}
+//		return allModules;
+//	}
 
 	/**
 	 * Add components defined in the CollectedMavenInfoObjects to the given
@@ -388,7 +556,9 @@ public class XMLObjectConverter {
 
 				if (withDependencies) {
 					Dependencies deps = new Dependencies();
-					deps.getDependency().addAll(moduleInfo.getDependsOn());
+					for (String tag : moduleInfo.getDependsOn()) {
+						deps.getDependency().add(getModuleNameFromTag(infoObject, tag));
+					}
 				}
 
 				modules.add(module);
@@ -412,9 +582,54 @@ public class XMLObjectConverter {
 				if (moduleInfo.getDependsOn() != null && !moduleInfo.getDependsOn().isEmpty()) {
 					Module currentModule = getModule(modules, moduleInfo.getModuleName());
 					Dependencies dep = new Dependencies();
-					dep.getDependency().addAll(moduleInfo.getDependsOn());
+					for (String tag : moduleInfo.getDependsOn()) {
+						dep.getDependency().add(getModuleNameFromTag(infoObject, tag));
+					}
 					currentModule.setModuleDependencies(dep);
 				}
+			}
+		}
+
+		return modules;
+	}
+
+	/**
+	 * Adds the dependencies between modules to the Module objects.
+	 * 
+	 * @param infoObjects defining CollectedMavenInfoObject.
+	 * @param modules     modules to add dependencies to.
+	 * @return the modules with the dependencies added.
+	 */
+	public List<Module> addModuleRestDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<Module> modules, boolean asRestDependency) {
+
+		Map<String, String> componentToModule = getComponentToModule(infoObjects);
+		for (Dependency dependency : serviceDependencies) {
+			if (componentToModule.containsKey(dependency.getServicePackage())) {
+				String moduleName = componentToModule.get(dependency.getServicePackage());
+				Module currentModule = getModuleFromNames(moduleName, modules);
+
+				String dependName = componentToModule.get(dependency.getDependsOnPackage());
+				if (dependName == null) {
+					break;
+				}
+				if (currentModule.getModuleDependencies() == null) {
+					Dependencies dependencies = new Dependencies();
+					currentModule.setModuleDependencies(dependencies);
+				}
+
+				if (asRestDependency) {
+				RestDependency restDependency = new RestDependency();
+				restDependency.setPath(dependency.getPath());
+				restDependency.setMethod(dependency.getMethod());
+				restDependency.setCalls(dependName);
+				currentModule.getModuleDependencies().getRestDependency().add(restDependency);
+				} else {
+					if (!currentModule.getModuleDependencies().getDependency().contains(dependName)) {
+						currentModule.getModuleDependencies().getDependency().add(dependName);
+					}
+				}
+
 			}
 		}
 
@@ -444,7 +659,7 @@ public class XMLObjectConverter {
 
 					if (withDependencies) {
 						Dependencies deps = new Dependencies();
-						deps.getDependency().addAll(pkgInfo.getDependsOn());						
+						deps.getDependency().addAll(pkgInfo.getDependsOn());
 						component.setComponentDependencies(deps);
 					}
 
@@ -456,47 +671,24 @@ public class XMLObjectConverter {
 
 		return allComponents;
 	}
-	
-	public List<Component> addExternalComponentDependencies(List<Component> components, List<Dependency> serviceDependencies) {
-		
+
+	public List<Component> addExternalComponentDependencies(List<Component> components,
+			List<Dependency> serviceDependencies) {
+
 		for (Component component : components) {
 			String pkgName = component.getName();
 			for (Dependency serviceDep : serviceDependencies) {
 				if (serviceDep.getServicePackage().startsWith(pkgName)) {
-					String dependencyComponentName = getComponentByPackageName(components, serviceDep.getDependsOnPackage());
+					String dependencyComponentName = serviceDep.getDependsOnPackage();
 					if (!component.getComponentDependencies().getDependency().contains(dependencyComponentName)) {
 						component.getComponentDependencies().getDependency().add(dependencyComponentName);
 					}
 				}
 			}
 		}
-		
+
 		return null;
 	}
-	
-	private String getComponentByPackageName(List<Component> components, String packageName) {
-		List<String> matchingComponents = new ArrayList<>();
-		for (Component component : components) {
-			if (packageName.startsWith(component.getName())) {
-				matchingComponents.add(component.getName());
-			}
-		}
-		if (!matchingComponents.isEmpty()) {
-			return getLongest(matchingComponents);
-		}
-		return "EXTERN";
-	}
-	
-	private String getLongest(List<String> allMatches) {
-		String longest = "";
-		for (String match : allMatches) {
-			if (match.length() > longest.length()) {
-				longest = match;
-			}
-		}
-		return longest;
-	}
-
 
 	/**
 	 * Gets all components defined in the given InfoObjects as generated Component
@@ -555,6 +747,34 @@ public class XMLObjectConverter {
 		return components;
 	}
 
+	public List<Component> addComponentRestDependencies(List<CollectedMavenInfoObject> infoObjects,
+			List<Dependency> serviceDependencies, List<Component> components, boolean asRestDependency) {
+		for (Component component : components) {
+			for (Dependency dependency : serviceDependencies) {
+				if (dependency.getServicePackage().equals(component.getName())) {
+					if (component.getComponentDependencies() == null) {
+						Dependencies dependencies = new Dependencies();
+						component.setComponentDependencies(dependencies);
+					}
+					if (asRestDependency) {
+					RestDependency restDependency = new RestDependency();
+					restDependency.setCalls(dependency.getDependsOnPackage());
+					restDependency.setMethod(dependency.getMethod());
+					restDependency.setPath(dependency.getPath());
+
+					component.getComponentDependencies().getRestDependency().add(restDependency);
+					} else {
+						if (!component.getComponentDependencies().getDependency().contains(dependency.getDependsOnPackage())) {
+							component.getComponentDependencies().getDependency().add(dependency.getDependsOnPackage());
+						}
+					}
+				}
+			}
+		}
+
+		return components;
+	}
+
 	/**
 	 * Searches in the list of Module objects for the module of the given name. If
 	 * there is no such Module, a new Module is generated and added to the list.
@@ -597,4 +817,39 @@ public class XMLObjectConverter {
 		return component;
 	}
 
+	private String getModuleNameFromTag(CollectedMavenInfoObject infoObject, String tag) {
+
+		for (ModuleInfoObject moduleInfoObject : infoObject.getModules()) {
+			if (moduleInfoObject.getTag().equalsIgnoreCase(tag)) {
+				return moduleInfoObject.getModuleName();
+			}
+		}
+
+		return tag;
+	}
+
+	private Module getModuleFromNames(String name, List<Module> modules) {
+		for (Module module : modules) {
+			if (module.getName().equals(name)) {
+				return module;
+			}
+		}
+
+		return null;
+	}
+
+	private Map<String, String> getComponentToModule(List<CollectedMavenInfoObject> infoObjects) {
+		Map<String, String> componentToModule = new HashMap<>();
+
+		for (CollectedMavenInfoObject info : infoObjects) {
+			for (ModuleToComponentInfoObject mTC : info.getComponents()) {
+				String moduleName = mTC.getModuleName();
+				for (ComponentInfoObject comp : mTC.getComponents()) {
+					componentToModule.put(comp.getPackageName(), moduleName);
+				}
+			}
+		}
+
+		return componentToModule;
+	}
 }

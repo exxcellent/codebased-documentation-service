@@ -5,10 +5,24 @@
     elementFormDefault="qualified">
 
 
-    <xsd:complexType name="dependencies">
+    
+    <xsd:complexType name="rest-dependency">
         <xsd:sequence>
-            <xsd:element name="dependency" type="xsd:string" maxOccurs="unbounded" minOccurs="0"/>
+            <xsd:element name="calls" type="xsd:string"/>
+            <xsd:element name="path" type="xsd:string"/>
+            <xsd:element name="method" type="xsd:string"/>
         </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:complexType name="dependencies">
+    	<xsd:sequence>
+        	<xsd:sequence>
+            	<xsd:element name="dependency" type="xsd:string" maxOccurs="unbounded" minOccurs="0"/>
+        	</xsd:sequence>
+        	<xsd:sequence>
+            	<xsd:element name="rest-dependency" type="rest-dependency" maxOccurs="unbounded" minOccurs="0"/>
+        	</xsd:sequence>
+    	</xsd:sequence>
     </xsd:complexType>
 
     <xsd:complexType name="component">
@@ -54,6 +68,8 @@
         <xsd:attribute name="name" type="xsd:string" use="required"/>
     </xsd:complexType>
     
+    <xsd:element name="rest-dependency" type="rest-dependency"/>
+    <xsd:element name="dependency" type="dependencies"/>
     <xsd:element name="component" type="component"/>
     <xsd:element name="module" type="module"/>
     <xsd:element name="service" type="service"/>

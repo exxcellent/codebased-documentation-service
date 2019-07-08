@@ -13,6 +13,9 @@ import com.google.common.collect.Sets;
 
 import annotation.ConsumesAPI;
 import business.model.Dependency;
+import collectors.models.maven.CollectedMavenInfoObject;
+import collectors.models.maven.ComponentInfoObject;
+import collectors.models.maven.ModuleToComponentInfoObject;
 import collectors.models.restapi.APIInfoObject;
 import collectors.models.restapi.CollectedAPIInfoObject;
 import util.ConsumeDescription;
@@ -21,7 +24,8 @@ import util.OfferDescription;
 
 public class ServiceConnector {
 
-	public List<Dependency> connectServices(List<CollectedAPIInfoObject> apiInfos) {
+	public List<Dependency> connectServices(List<CollectedAPIInfoObject> apiInfos,
+			List<CollectedMavenInfoObject> mavenInfos) {
 		List<Dependency> serviceDependencyDescription = new ArrayList<>();
 		if (apiInfos == null || apiInfos.isEmpty()) {
 			return serviceDependencyDescription;
@@ -36,7 +40,7 @@ public class ServiceConnector {
 
 		Map<String, List<ConsumeDescription>> consumeTriples = new HashMap<>();
 		List<APIInfoObject> providesTriples = new ArrayList<>();
-		
+
 		for (CollectedAPIInfoObject apiInfo : apiInfos) {
 			if (apiInfo == null || apiInfo.getConsume() == null) {
 				break;
@@ -49,17 +53,21 @@ public class ServiceConnector {
 			} else {
 				consumeTriples.put(ConsumesAPI.DEFAULT_SERVICE, apiInfo.getConsume());
 			}
-			
+
 			if (apiInfo.getProvide().getApi() != null) {
-				providesTriples.add(apiInfo.getProvide());				
+				providesTriples.add(apiInfo.getProvide());
 			}
-			
+
 		}
 		serviceNames.add("external");
 
 		leftovers = matchByServiceName(consumeTriples, providesTriples, serviceDependencyDescription, serviceNames);
 		leftovers = matchByPath(leftovers, providesTriples, serviceDependencyDescription);
 		setLeftoversExternal(leftovers, serviceDependencyDescription);
+		
+		if (mavenInfos != null) {
+			serviceDependencyDescription = refineDependencies(serviceDependencyDescription, mavenInfos);
+		}
 		return serviceDependencyDescription;
 	}
 
@@ -209,7 +217,7 @@ public class ServiceConnector {
 	private Set<String> getMethodsOfConsumes(ConsumeDescription consumes, String path) {
 		if (consumes.getPathToMethods().containsKey(path)) {
 			return consumes.getPathToMethods().get(path);
-			
+
 		}
 		return null;
 	}
@@ -238,7 +246,7 @@ public class ServiceConnector {
 		for (ConsumeDescription currentTriple : triples) {
 			List<Dependency> firstMatches = null;
 			boolean othersFound = false;
-
+			
 			for (OfferDescription description : matchingServiceObject.getApi()) {
 				for (String comparePath : description.getPathToMethodMappings().keySet()) {
 
@@ -390,6 +398,79 @@ public class ServiceConnector {
 
 	private String formatPath(String path) {
 		return path.replaceAll("\\{.*\\}", "{}"); // TODO: TYPE CHECK! replace with type instead of empty brackets
+	}
+
+	private List<Dependency> refineDependencies(List<Dependency> dependencies,
+			List<CollectedMavenInfoObject> mavenInfos) {
+
+		Map<String, List<String>> serviceToComponentNames = new HashMap<>();
+		for (Dependency currentDependency : dependencies) {
+			String service = currentDependency.getService();
+			List<String> serviceComponents;
+			if (serviceToComponentNames.containsKey(service)) {
+				serviceComponents = serviceToComponentNames.get(service);
+			} else {
+				serviceComponents = getComponentNames(service, mavenInfos);
+			}
+			String dependsOnService = currentDependency.getDependsOn();
+			List<String> dependsOnComponents;
+			if (serviceToComponentNames.containsKey(dependsOnService)) {
+				dependsOnComponents = serviceToComponentNames.get(dependsOnService);
+			} else {
+				dependsOnComponents = getComponentNames(dependsOnService, mavenInfos);
+			}
+			
+			String component = shortenToComponent(serviceComponents, currentDependency.getServicePackage());
+			String dependComponent = shortenToComponent(dependsOnComponents, currentDependency.getDependsOnPackage());
+			
+			currentDependency.setServicePackage(component);
+			currentDependency.setDependsOnPackage(dependComponent);
+		}
+
+		return dependencies;
+	}
+
+	private List<String> getComponentNames(String serviceName, List<CollectedMavenInfoObject> mavenInfos) {
+		List<ComponentInfoObject> components = new ArrayList<>();
+		for (CollectedMavenInfoObject infoObject : mavenInfos) {
+			if (infoObject.getProjectName().equalsIgnoreCase(serviceName)) {
+				for (ModuleToComponentInfoObject mtc : infoObject.getComponents()) {
+					components.addAll(mtc.getComponents());
+				}
+			}
+		}
+		List<String> names = new ArrayList<>();
+		for (ComponentInfoObject comp : components) {
+			names.add(comp.getPackageName());
+		}
+		return names;
+	}
+
+	private String shortenToComponent(List<String> componentNames, String packageName) {
+		List<String> names = new ArrayList<>();
+		for (String componentName : componentNames) {
+			if (packageName.startsWith(componentName)) {
+				names.add(componentName);
+			}
+		}
+
+		if (names.size() > 1) {
+			return findLongest(names);
+		}
+		if (!names.isEmpty()) {
+			return names.get(0);			
+		}
+		return packageName;
+	}
+
+	private String findLongest(List<String> names) {
+		String longest = "";
+		for (String match : names) {
+			if (match.length() > longest.length()) {
+				longest = match;
+			}
+		}
+		return longest;
 	}
 
 }

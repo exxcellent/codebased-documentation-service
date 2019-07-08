@@ -13,9 +13,10 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.stream.JsonReader;
 
 import collectors.models.InfoObject;
+import data.file.FileReader;
 import filemanagement.FileWriter;
 
-public class InfoObjectConverter {
+public class FileToInfoObjectConverter {
 	
 	/**
 	 * Creates InfoObjects (if possible) based on the files in the given list.
@@ -41,6 +42,14 @@ public class InfoObjectConverter {
 		}
 
 		return objects;
+	}
+	
+	public static <T extends InfoObject> List<T> getCollectedInfoObjects(String name, Class<T> clazz, File... srcFolders) {
+		List<File> foundFiles = new ArrayList<>();
+		for (File file : srcFolders) {
+			foundFiles.addAll(FileReader.findFilesWithName(file, name, ".json"));
+		}
+		return createJSONObjects(foundFiles, clazz);
 	}
 
 }

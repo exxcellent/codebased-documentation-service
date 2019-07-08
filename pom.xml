@@ -131,6 +131,7 @@
 								<arg>-Xequals</arg>
 								<arg>-XhashCode</arg>
 								<arg>-XtoString</arg>
+								<arg>-Xcopyable</arg>
 							</args>
 						</configuration>
 					</execution>

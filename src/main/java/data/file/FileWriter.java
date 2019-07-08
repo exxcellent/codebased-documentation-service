@@ -16,9 +16,23 @@ import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
 
 public class FileWriter implements DataOutputToFile {
+	
+	private File targetFolder;
+	
+	public FileWriter(File targetFolder) {
+		this.targetFolder = targetFolder;
+	}
+	
+	public void setTargetFolder(File targetFolder) {
+		this.targetFolder = targetFolder;
+	}
+	
+	public String getTargetFolderName() {
+		return targetFolder.getAbsolutePath();
+	}
 
 	@Override
-	public List<File> writeToFile(String content, String fileName, String fileType, File targetFolder) {
+	public List<File> writeToFile(String content, String fileName, String fileType) {
 		List<File> createdFiles = new ArrayList<>();
 		String subfolderName = fileType;
 		File target = Paths.get(targetFolder.getAbsolutePath(), subfolderName).toFile();
