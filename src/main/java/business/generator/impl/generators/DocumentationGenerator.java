@@ -1,6 +1,7 @@
 package business.generator.impl.generators;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -37,7 +38,7 @@ public class DocumentationGenerator {
 				DocumentationMojo.API_AGGREGATE_NAME + DocumentationMojo.SUFFIX, CollectedAPIInfoObject.class,
 				srcFolders);
 
-		List<Dependency> serviceDependencies = null;
+		List<Dependency> serviceDependencies = new ArrayList<>();
 		if (apiInfoObjects != null && !apiInfoObjects.isEmpty()) {
 			ServiceConnector connector = new ServiceConnector();
 			serviceDependencies = connector.connectServices(apiInfoObjects, infoObjects);
@@ -46,16 +47,17 @@ public class DocumentationGenerator {
 		SystemsFactory factory = new SystemsFactory(infoObjects, serviceDependencies);
 		SystemsCustomizer customizer = new SystemsCustomizer();
 
-		Set<DependencyPlacement> placements = new HashSet<>();
-		placements.add(DependencyPlacement.SERVICE);
+		Set<DependencyPlacement> servicePlacements = new HashSet<>();
+		servicePlacements.add(DependencyPlacement.SERVICE);
 
-		Systems systemsServiceWRest = customizer.getServicesWithRestDiagram(factory.getBaseSystemsWithRest(placements));
+		Systems systemsServiceWRest = customizer.getServicesWithRestDiagram(factory.getBaseSystemsWithRest(servicePlacements));
 		Systems systemsModules = customizer.getModuleDiagram(factory.getBaseSystems());
 		Systems systemsComponents = customizer.getComponentModuleDiagram(factory.getBaseSystems());
-		placements.clear();
-		placements.add(DependencyPlacement.COMPONENT);
+
+		Set<DependencyPlacement> componentPlacements = new HashSet<>();
+		componentPlacements.add(DependencyPlacement.COMPONENT);
 		Systems systemsComponentsWRest = customizer
-				.getComponentModuleDiagram(factory.getBaseSystemsWithRest(placements));
+				.getComponentModuleDiagram(factory.getBaseSystemsWithRest(componentPlacements));
 
 		if (pltUml) {
 			java.lang.System.out.println(" - PLANTUML");

@@ -35,7 +35,7 @@ public class ServiceConnector {
 
 		List<String> serviceNames = new ArrayList<>();
 		for (CollectedAPIInfoObject currentInfo : apiInfos) {
-			serviceNames.add(currentInfo.getServiceName());
+			serviceNames.add(currentInfo.getServiceTag());
 		}
 
 		Map<String, List<ConsumeDescription>> consumeTriples = new HashMap<>();
@@ -45,8 +45,8 @@ public class ServiceConnector {
 			if (apiInfo == null || apiInfo.getConsume() == null) {
 				break;
 			}
-			if (apiInfo.getServiceName() != null && !apiInfo.getServiceName().equals(ConsumesAPI.DEFAULT_SERVICE)) {
-				consumeTriples.put(apiInfo.getServiceName(), apiInfo.getConsume());
+			if (apiInfo.getServiceTag() != null && !apiInfo.getServiceTag().equals(ConsumesAPI.DEFAULT_SERVICE)) {
+				consumeTriples.put(apiInfo.getServiceTag(), apiInfo.getConsume());
 			} else if (consumeTriples.containsKey(ConsumesAPI.DEFAULT_SERVICE)
 					&& consumeTriples.get(ConsumesAPI.DEFAULT_SERVICE) != null) {
 				consumeTriples.get(ConsumesAPI.DEFAULT_SERVICE).addAll(apiInfo.getConsume());
@@ -93,11 +93,11 @@ public class ServiceConnector {
 			String currentService = currentServiceToTripleEntry.getKey();
 
 			for (ConsumeDescription currentConsumeDescription : currentServiceToTripleEntry.getValue()) {
-				String dependServiceName = currentConsumeDescription.getServiceName();
+				String dependServiceTag = currentConsumeDescription.getServiceName();
 
-				if (serviceNames.contains(dependServiceName)
-						&& !dependServiceName.equals(ConsumesAPI.DEFAULT_SERVICE)) {
-					APIInfoObject matchingService = getApiInfoObjectByServiceName(providesTriples, dependServiceName);
+				if (serviceNames.contains(dependServiceTag)
+						&& !dependServiceTag.equals(ConsumesAPI.DEFAULT_SERVICE)) {
+					APIInfoObject matchingService = getApiInfoObjectByServiceName(providesTriples, dependServiceTag);
 
 					List<Dependency> matches = getMatchingPathAndMethod(currentServiceToTripleEntry.getValue(),
 							matchingService);
@@ -105,7 +105,7 @@ public class ServiceConnector {
 						serviceDependencyDescription.addAll(matches);
 					} else {
 						System.out.println(
-								"No matching path and method in " + currentService + " on " + dependServiceName);
+								"No matching path and method in " + currentService + " on " + dependServiceTag);
 					}
 				} else {
 					if (consumeWithoutMatchOrName.containsKey(currentService)) {
@@ -119,19 +119,6 @@ public class ServiceConnector {
 		}
 
 		return consumeWithoutMatchOrName;
-	}
-
-	private String getPackageOfPath(List<APIInfoObject> apiInfos, String service, String path) {
-		for (APIInfoObject info : apiInfos) {
-			if (info.getMicroserviceName().equalsIgnoreCase(service)) {
-				for (OfferDescription desc : info.getApi()) {
-					if (desc.getPathToMethodMappings().containsKey(path)) {
-						return desc.getPackageName();
-					}
-				}
-			}
-		}
-		return "";
 	}
 
 	private Map<String, List<ConsumeDescription>> matchByPath(Map<String, List<ConsumeDescription>> consumeTriples,
@@ -184,6 +171,25 @@ public class ServiceConnector {
 		return consumeWithoutMatch;
 	}
 
+	private String getPackageOfPath(List<APIInfoObject> apiInfos, String service, String path) {
+		for (APIInfoObject info : apiInfos) {
+			if (info.getMicroserviceTag().equalsIgnoreCase(service)) {
+				for (OfferDescription desc : info.getApi()) {
+					if (desc.getPathToMethodMappings().containsKey(path)) {
+						return desc.getPackageName();
+					} else {
+						for (String currentPath : desc.getPathToMethodMappings().keySet()) {
+							if (formatPath(currentPath).equalsIgnoreCase(formatPath(path))) {
+								return desc.getPackageName();
+							}
+						}
+					}
+				}
+			}
+		}
+		return "";
+	}
+
 	private void setLeftoversExternal(Map<String, List<ConsumeDescription>> leftovers,
 			List<Dependency> serviceDependencyDescription) {
 		for (Entry<String, List<ConsumeDescription>> entry : leftovers.entrySet()) {
@@ -207,7 +213,7 @@ public class ServiceConnector {
 
 	private APIInfoObject getApiInfoObjectByServiceName(List<APIInfoObject> apiInfos, String serviceName) {
 		for (APIInfoObject apiInfo : apiInfos) {
-			if (apiInfo.getMicroserviceName().equals(serviceName)) {
+			if (apiInfo.getMicroserviceTag().equals(serviceName) || apiInfo.getMicroserviceTag().startsWith(serviceName)) {
 				return apiInfo;
 			}
 		}
@@ -261,7 +267,7 @@ public class ServiceConnector {
 								if (compareMethods.contains(currentMethod)) {
 									Dependency dependency = new Dependency();
 									dependency.setService(currentTriple.getServiceName());
-									dependency.setDependsOn(matchingServiceObject.getMicroserviceName());
+									dependency.setDependsOn(matchingServiceObject.getMicroserviceTag());
 									dependency.setServicePackage(currentTriple.getPackageName());
 									dependency.setDependsOnPackage(description.getPackageName());
 									dependency.setMethod(currentMethod);
@@ -313,9 +319,9 @@ public class ServiceConnector {
 				for (String path : offer.getPathToMethodMappings().keySet()) {
 					String formattedPath = formatPath(path);
 					if (pathToServices.containsKey(formattedPath)) {
-						pathToServices.get(formattedPath).add(apiInfo.getMicroserviceName());
+						pathToServices.get(formattedPath).add(apiInfo.getMicroserviceTag());
 					} else {
-						pathToServices.put(formattedPath, Sets.newHashSet(apiInfo.getMicroserviceName()));
+						pathToServices.put(formattedPath, Sets.newHashSet(apiInfo.getMicroserviceTag()));
 					}
 				}
 			}
@@ -400,10 +406,17 @@ public class ServiceConnector {
 		return path.replaceAll("\\{.*\\}", "{}"); // TODO: TYPE CHECK! replace with type instead of empty brackets
 	}
 
+	/**
+	 * Refine dependencies by searching for the components to add them instead of the package name to the dependency
+	 * @param dependencies current found dependencies
+	 * @param mavenInfos CollectedMavenInfos in which the dependencies were defined
+	 * @return
+	 */
 	private List<Dependency> refineDependencies(List<Dependency> dependencies,
 			List<CollectedMavenInfoObject> mavenInfos) {
 
 		Map<String, List<String>> serviceToComponentNames = new HashMap<>();
+		
 		for (Dependency currentDependency : dependencies) {
 			String service = currentDependency.getService();
 			List<String> serviceComponents;
@@ -419,7 +432,6 @@ public class ServiceConnector {
 			} else {
 				dependsOnComponents = getComponentNames(dependsOnService, mavenInfos);
 			}
-			
 			String component = shortenToComponent(serviceComponents, currentDependency.getServicePackage());
 			String dependComponent = shortenToComponent(dependsOnComponents, currentDependency.getDependsOnPackage());
 			
@@ -433,7 +445,7 @@ public class ServiceConnector {
 	private List<String> getComponentNames(String serviceName, List<CollectedMavenInfoObject> mavenInfos) {
 		List<ComponentInfoObject> components = new ArrayList<>();
 		for (CollectedMavenInfoObject infoObject : mavenInfos) {
-			if (infoObject.getProjectName().equalsIgnoreCase(serviceName)) {
+			if (infoObject.getTag().equalsIgnoreCase(serviceName)) {
 				for (ModuleToComponentInfoObject mtc : infoObject.getComponents()) {
 					components.addAll(mtc.getComponents());
 				}

@@ -139,7 +139,7 @@ public class XMLObjectConverter {
 		Map<String, String> serviceToSystem = new HashMap<>();
 
 		for (CollectedMavenInfoObject infoO : infoObjects) {
-			serviceToSystem.put(infoO.getProjectName(), infoO.getSystem());
+			serviceToSystem.put(infoO.getTag(), infoO.getSystem());
 		}
 
 		return serviceToSystem;
@@ -281,7 +281,7 @@ public class XMLObjectConverter {
 		Map<String, String> serviceToSubsystem = new HashMap<>();
 
 		for (CollectedMavenInfoObject infoO : infoObjects) {
-			serviceToSubsystem.put(infoO.getProjectName(), infoO.getSubsystem());
+			serviceToSubsystem.put(infoO.getTag(), infoO.getSubsystem());
 		}
 
 		return serviceToSubsystem;
@@ -303,6 +303,7 @@ public class XMLObjectConverter {
 				if (infoObject.getSubsystem().equals(subsystem.getName())) {
 					Service service = new Service();
 					service.setName(infoObject.getProjectName());
+					service.setTag(infoObject.getTag());
 					services.add(service);
 				}
 			}
@@ -329,6 +330,7 @@ public class XMLObjectConverter {
 		for (CollectedMavenInfoObject infoObject : infoObjects) {
 			Service service = new Service();
 			service.setName(infoObject.getProjectName());
+			service.setTag(infoObject.getTag());
 
 			if (withDependencies) {
 				for (Dependency dep : serviceDependencies) {
@@ -363,7 +365,7 @@ public class XMLObjectConverter {
 
 		for (Service currentService : services) {
 			for (Dependency dependency : serviceDependencies) {
-				if (currentService.getName().equals(dependency.getService())) {
+				if (currentService.getTag().equals(dependency.getService())) {
 					if (currentService.getServiceDependencies() == null) {
 						Dependencies dep = new Dependencies();
 						dep.getDependency().add(dependency.getDependsOn());
@@ -387,7 +389,7 @@ public class XMLObjectConverter {
 			for (Dependency dependency : serviceDependencies) {
 				String path = dependency.getPath();
 				String method = dependency.getMethod();
-				if (currentService.getName().equals(dependency.getService())) {
+				if (currentService.getTag().equals(dependency.getService())) {
 					if (currentService.getServiceDependencies() == null) {
 						Dependencies dep = new Dependencies();
 						currentService.setServiceDependencies(dep);
@@ -400,7 +402,8 @@ public class XMLObjectConverter {
 						restDependency.setMethod(method);
 						currentService.getServiceDependencies().getRestDependency().add(restDependency);
 					} else {
-						if (!currentService.getServiceDependencies().getDependency().contains(dependency.getService())) {
+						if (!currentService.getServiceDependencies().getDependency()
+								.contains(dependency.getService())) {
 							currentService.getServiceDependencies().getDependency().add(dependency.getService());
 						}
 					}
@@ -430,7 +433,7 @@ public class XMLObjectConverter {
 		for (Service service : services) {
 			Set<Module> modules = new HashSet<>();
 			for (CollectedMavenInfoObject infoObject : infoObjects) {
-				if (infoObject.getProjectName().equals(service.getName())) {
+				if (infoObject.getTag().equals(service.getTag())) {
 					for (ModuleInfoObject moduleInfo : infoObject.getModules()) {
 						Module module = new Module();
 						module.setName(moduleInfo.getModuleName());
@@ -439,7 +442,7 @@ public class XMLObjectConverter {
 						if (withDependencies) {
 							Dependencies deps = new Dependencies();
 							for (String tag : moduleInfo.getDependsOn()) {
-								deps.getDependency().add(getModuleNameFromTag(infoObject, tag));
+								deps.getDependency().add(tag);
 							}
 							module.setModuleDependencies(deps);
 						}
@@ -557,7 +560,7 @@ public class XMLObjectConverter {
 				if (withDependencies) {
 					Dependencies deps = new Dependencies();
 					for (String tag : moduleInfo.getDependsOn()) {
-						deps.getDependency().add(getModuleNameFromTag(infoObject, tag));
+						deps.getDependency().add(tag);
 					}
 				}
 
@@ -583,7 +586,7 @@ public class XMLObjectConverter {
 					Module currentModule = getModule(modules, moduleInfo.getModuleName());
 					Dependencies dep = new Dependencies();
 					for (String tag : moduleInfo.getDependsOn()) {
-						dep.getDependency().add(getModuleNameFromTag(infoObject, tag));
+						dep.getDependency().add(tag);
 					}
 					currentModule.setModuleDependencies(dep);
 				}
@@ -594,7 +597,7 @@ public class XMLObjectConverter {
 	}
 
 	/**
-	 * Adds the dependencies between modules to the Module objects.
+	 * Adds the REST dependencies between modules to the Module objects.
 	 * 
 	 * @param infoObjects defining CollectedMavenInfoObject.
 	 * @param modules     modules to add dependencies to.
@@ -619,11 +622,11 @@ public class XMLObjectConverter {
 				}
 
 				if (asRestDependency) {
-				RestDependency restDependency = new RestDependency();
-				restDependency.setPath(dependency.getPath());
-				restDependency.setMethod(dependency.getMethod());
-				restDependency.setCalls(dependName);
-				currentModule.getModuleDependencies().getRestDependency().add(restDependency);
+					RestDependency restDependency = new RestDependency();
+					restDependency.setPath(dependency.getPath());
+					restDependency.setMethod(dependency.getMethod());
+					restDependency.setCalls(dependName);
+					currentModule.getModuleDependencies().getRestDependency().add(restDependency);
 				} else {
 					if (!currentModule.getModuleDependencies().getDependency().contains(dependName)) {
 						currentModule.getModuleDependencies().getDependency().add(dependName);
@@ -747,6 +750,18 @@ public class XMLObjectConverter {
 		return components;
 	}
 
+	/**
+	 * Add dependencies defined by REST calls to the given components.
+	 * 
+	 * @param infoObjects         CollectedMavenInfoObject which contain all info
+	 * @param serviceDependencies Dependencies between Services
+	 * @param components          components, to which the dependencies are to be
+	 *                            added.
+	 * @param asRestDependency    if true adds the dependency as RestDependency with
+	 *                            info about method and path, if false adds as
+	 *                            simple use-Dependency.
+	 * @return
+	 */
 	public List<Component> addComponentRestDependencies(List<CollectedMavenInfoObject> infoObjects,
 			List<Dependency> serviceDependencies, List<Component> components, boolean asRestDependency) {
 		for (Component component : components) {
@@ -757,14 +772,15 @@ public class XMLObjectConverter {
 						component.setComponentDependencies(dependencies);
 					}
 					if (asRestDependency) {
-					RestDependency restDependency = new RestDependency();
-					restDependency.setCalls(dependency.getDependsOnPackage());
-					restDependency.setMethod(dependency.getMethod());
-					restDependency.setPath(dependency.getPath());
+						RestDependency restDependency = new RestDependency();
+						restDependency.setCalls(dependency.getDependsOnPackage());
+						restDependency.setMethod(dependency.getMethod());
+						restDependency.setPath(dependency.getPath());
 
-					component.getComponentDependencies().getRestDependency().add(restDependency);
+						component.getComponentDependencies().getRestDependency().add(restDependency);
 					} else {
-						if (!component.getComponentDependencies().getDependency().contains(dependency.getDependsOnPackage())) {
+						if (!component.getComponentDependencies().getDependency()
+								.contains(dependency.getDependsOnPackage())) {
 							component.getComponentDependencies().getDependency().add(dependency.getDependsOnPackage());
 						}
 					}
@@ -785,7 +801,7 @@ public class XMLObjectConverter {
 	 */
 	private Module getModule(List<Module> modules, String moduleName) {
 		for (Module module : modules) {
-			if (module.getName().equals(moduleName)) {
+			if (module.getTag().equals(moduleName)) {
 				return module;
 			}
 		}
@@ -830,7 +846,7 @@ public class XMLObjectConverter {
 
 	private Module getModuleFromNames(String name, List<Module> modules) {
 		for (Module module : modules) {
-			if (module.getName().equals(name)) {
+			if (module.getTag().equals(name)) {
 				return module;
 			}
 		}
