@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 import data.model.xml.Component;
@@ -29,12 +30,13 @@ public class XMLToPlantUMLConverter {
 	private int interfaceCounter = 0;
 
 	public String convertSystems(System system) {
+		serviceNameAndinterfaceToAlias = new HashMap<>();
 		serviceTagToName = null;
-		if (!areThereDoubleServiceNames(Lists.newArrayList(system))) {
+		if (!areThereDoubleServiceNames(ImmutableList.of(system))) {
 			serviceTagToName = getTagToNameForServices(Lists.newArrayList(system));
 		}
 		moduleTagToName = null;
-		if (!areThereDoubleModuleNames(Lists.newArrayList(system))) {
+		if (!areThereDoubleModuleNames(ImmutableList.of(system))) {
 			moduleTagToName = getTagToNameForModules(Lists.newArrayList(system));
 		}
 
@@ -53,12 +55,13 @@ public class XMLToPlantUMLConverter {
 		for (String depString : dependencyStrings) {
 			diagramDescription += depString;
 		}
-		diagramDescription += END_DIAGRAM;
 		interfaceCounter = 0;
+		diagramDescription += END_DIAGRAM;
 		return diagramDescription;
 	}
 
 	public String convertSystems(List<System> systems) {
+		serviceNameAndinterfaceToAlias = new HashMap<>();
 		serviceTagToName = null;
 		if (!areThereDoubleServiceNames(systems)) {
 			serviceTagToName = getTagToNameForServices(systems);
@@ -362,11 +365,9 @@ public class XMLToPlantUMLConverter {
 		}
 		if (service && serviceTagToName != null) { //current dependency on service level, there were no double names in services
 			String result = serviceTagToName.get(dependency);
-			java.lang.System.out.println(dependency + "->" + result + "(service)");
 			return (result == null) ? dependency : result;
 		} else if (module && moduleTagToName != null) { //current dependency on module level, there were no double names in modules
 			String result = moduleTagToName.get(dependency);
-			java.lang.System.out.println(dependency + "->" + result + "(module)");
 			return (result == null) ? dependency : result;
 		}
 		return dependency;
