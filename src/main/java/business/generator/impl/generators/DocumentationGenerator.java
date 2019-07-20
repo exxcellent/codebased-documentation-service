@@ -11,10 +11,10 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 
 import business.converter.FileToInfoObjectConverter;
-import business.converter.PlantUMLStringConverter;
+import business.converter.XMLToPlantUMLConverter;
 import business.generator.impl.connectors.ServiceConnector;
-import business.generator.impl.creator.SystemsFactory;
-import business.generator.impl.creator.SystemsFactory.DependencyPlacement;
+import business.generator.impl.creator.SystemsCreator;
+import business.generator.impl.creator.SystemsCreator.DependencyPlacement;
 import business.model.Dependency;
 import collectors.models.maven.CollectedMavenInfoObject;
 import collectors.models.restapi.CollectedAPIInfoObject;
@@ -44,8 +44,8 @@ public class DocumentationGenerator {
 			serviceDependencies = connector.connectServices(apiInfoObjects, infoObjects);
 		}
 
-		SystemsFactory factory = new SystemsFactory(infoObjects, serviceDependencies);
-		SystemsCustomizer customizer = new SystemsCustomizer();
+		SystemsCreator factory = new SystemsCreator(infoObjects, serviceDependencies);
+		CustomSystemsGenerator customizer = new CustomSystemsGenerator();
 
 		Set<DependencyPlacement> servicePlacements = new HashSet<>();
 		servicePlacements.add(DependencyPlacement.SERVICE);
@@ -61,7 +61,7 @@ public class DocumentationGenerator {
 
 		if (pltUml) {
 			java.lang.System.out.println(" - PLANTUML");
-			PlantUMLStringConverter pltUmlConverter = new PlantUMLStringConverter();
+			XMLToPlantUMLConverter pltUmlConverter = new XMLToPlantUMLConverter();
 
 			String allSystemsServiceWRestString = pltUmlConverter.convertSystems(systemsServiceWRest.getSystem());
 			writePlantUMLForEachSystem(pltUmlConverter, systemsServiceWRest.getSystem(), output, viz, "_services");
@@ -132,7 +132,7 @@ public class DocumentationGenerator {
 
 	}
 
-	public void writePlantUMLForEachSystem(PlantUMLStringConverter pltUmlConverter, List<System> systemList,
+	public void writePlantUMLForEachSystem(XMLToPlantUMLConverter pltUmlConverter, List<System> systemList,
 			DataOutputToFile output, boolean visualize, String suffix) {
 		for (System system : systemList) {
 			String currentSysString = pltUmlConverter.convertSystems(system);

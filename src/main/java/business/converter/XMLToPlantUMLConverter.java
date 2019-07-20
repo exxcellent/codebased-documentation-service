@@ -2,8 +2,10 @@ package business.converter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.google.common.collect.Lists;
 
@@ -15,13 +17,16 @@ import data.model.xml.Service;
 import data.model.xml.Subsystem;
 import data.model.xml.System;
 
-public class PlantUMLStringConverter {
+public class XMLToPlantUMLConverter {
 
 	private static String BEGIN_DIAGRAM = "@startuml\n skinparam componentStyle uml2\n\n";
 	private static String END_DIAGRAM = "@enduml\n";
 
 	private Map<String, String> serviceTagToName;
 	private Map<String, String> moduleTagToName;
+	
+	private Map<String, String> serviceNameAndinterfaceToAlias = new HashMap<>();
+	private int interfaceCounter = 0;
 
 	public String convertSystems(System system) {
 		serviceTagToName = null;
@@ -36,15 +41,20 @@ public class PlantUMLStringConverter {
 		String diagramDescription = BEGIN_DIAGRAM;
 
 		List<String> dependencyStrings = new ArrayList<>();
+		List<String> interfaces = new ArrayList<>();
 
 		diagramDescription += "package \"" + "system: " + system.getName() + "\" { \n";
-		diagramDescription += getSubsystems(system, dependencyStrings);
+		diagramDescription += getSubsystems(system, dependencyStrings, interfaces);
 		diagramDescription += "}\n\n";
 
+		for (String currentInterface : interfaces) {
+			diagramDescription += currentInterface;
+		}
 		for (String depString : dependencyStrings) {
 			diagramDescription += depString;
 		}
 		diagramDescription += END_DIAGRAM;
+		interfaceCounter = 0;
 		return diagramDescription;
 	}
 
@@ -61,18 +71,23 @@ public class PlantUMLStringConverter {
 		String diagramDescription = BEGIN_DIAGRAM;
 
 		List<String> dependencyStrings = new ArrayList<>();
+		List<String> interfaces = new ArrayList<>();
 		for (System currentSystem : systems) {
 			diagramDescription += "package \"" + "system: " + currentSystem.getName() + "\" { \n";
-			diagramDescription += getSubsystems(currentSystem, dependencyStrings);
+			diagramDescription += getSubsystems(currentSystem, dependencyStrings, interfaces);
 			diagramDescription += "}\n\n";
 			addDependenciesBetweenPackages(currentSystem.getName(), "system", currentSystem.getSystemDependencies(), false, false,
-					dependencyStrings);
+					dependencyStrings, interfaces);
 		}
 
+		for (String currentInterface : interfaces) {
+			diagramDescription += currentInterface;
+		}
 		for (String depString : dependencyStrings) {
 			diagramDescription += depString;
 		}
 
+		interfaceCounter = 0;
 		return diagramDescription + END_DIAGRAM;
 	}
 
@@ -122,7 +137,7 @@ public class PlantUMLStringConverter {
 		return false;
 	}
 
-	private String getSubsystems(System system, List<String> dependencyStrings) {
+	private String getSubsystems(System system, List<String> dependencyStrings, List<String> interfaces) {
 		String description = "";
 
 		if (system.getSubsystem() != null) {
@@ -130,13 +145,13 @@ public class PlantUMLStringConverter {
 				description += "package \"" + "subsystem: " + subsystem.getName() + "\" { \n";
 
 				if (subsystem.getService() != null) {
-					description += getServices(subsystem, dependencyStrings);
+					description += getServices(subsystem, dependencyStrings, interfaces);
 				}
 
 				description += "}\n\n";
 
 				addDependenciesBetweenPackages(subsystem.getName(), "subsystem", subsystem.getSubsystemDependencies(), false, false,
-						dependencyStrings);
+						dependencyStrings, interfaces);
 			}
 
 			return description;
@@ -145,7 +160,7 @@ public class PlantUMLStringConverter {
 		}
 	}
 
-	private String getServices(Subsystem subsystem, List<String> dependencyStrings) {
+	private String getServices(Subsystem subsystem, List<String> dependencyStrings, List<String> interfaces) {
 		String description = "";
 
 		if (subsystem.getService() != null) {
@@ -158,23 +173,23 @@ public class PlantUMLStringConverter {
 				}
 			}
 			for (Service service : subsystem.getService()) {
-				String serviceDisplayName = (serviceTagToName == null) ? service.getTag() : service.getName();
+				String serviceDisplayName = ((serviceTagToName != null) ? service.getName() : service.getTag());
 				if (isPackage) {
 					description += "package \"" + "service: " + serviceDisplayName + "\" { \n";
 
 					if (service.getModule() != null) {
-						description += getModules(service, dependencyStrings);
+						description += getModules(service, dependencyStrings, interfaces);
 					} else if (service.getComponent() != null) {
-						description += getComponents(service, dependencyStrings);
+						description += getComponents(service, dependencyStrings, interfaces);
 					}
 
 					description += "}\n\n";
 					addDependenciesBetweenPackages(serviceDisplayName, "service", service.getServiceDependencies(), true, false,
-							dependencyStrings);
+							dependencyStrings, interfaces);
 				} else {
 					description += "[\"" + serviceDisplayName + "\"] \n";
 					addDependenciesBetweenComponents(serviceDisplayName, service.getServiceDependencies(), true, false,
-							dependencyStrings);
+							dependencyStrings, interfaces);
 				}
 			}
 
@@ -184,13 +199,13 @@ public class PlantUMLStringConverter {
 		}
 	}
 
-	private String getComponents(Service service, List<String> dependencyStrings) {
+	private String getComponents(Service service, List<String> dependencyStrings, List<String> interfaces) {
 		String description = "";
 		if (service.getComponent() != null) {
 			for (Component component : service.getComponent()) {
 				description += "[\"" + component.getName() + "\"]\n";
 				addDependenciesBetweenComponents(component.getName(), component.getComponentDependencies(), false, false,
-						dependencyStrings);
+						dependencyStrings, interfaces);
 			}
 			return description;
 		} else {
@@ -198,7 +213,7 @@ public class PlantUMLStringConverter {
 		}
 	}
 
-	private String getModules(Service service, List<String> dependencyStrings) {
+	private String getModules(Service service, List<String> dependencyStrings, List<String> interfaces) {
 		String description = "";
 
 		if (service.getModule() != null) {
@@ -215,16 +230,16 @@ public class PlantUMLStringConverter {
 					description += "package \"" + "module: " + moduleDisplayName + "\" { \n";
 
 					if (module.getComponent() != null) {
-						description += getComponents(module, dependencyStrings);
+						description += getComponents(module, dependencyStrings, interfaces);
 					}
 
 					description += "}\n\n";
 					addDependenciesBetweenPackages(moduleDisplayName, "module", module.getModuleDependencies(), false, true, 
-							dependencyStrings);
+							dependencyStrings, interfaces);
 				} else {
 					description += "[\"" + moduleDisplayName + "\"]\n";
 					addDependenciesBetweenComponents(moduleDisplayName, module.getModuleDependencies(), false, true, 
-							dependencyStrings);
+							dependencyStrings, interfaces);
 				}
 			}
 
@@ -234,7 +249,7 @@ public class PlantUMLStringConverter {
 		}
 	}
 
-	private String getComponents(Module module, List<String> dependencyStrings) {
+	private String getComponents(Module module, List<String> dependencyStrings, List<String> interfaces) {
 		String description = "";
 
 		if (module.getComponent() != null) {
@@ -242,7 +257,7 @@ public class PlantUMLStringConverter {
 				description += "[\"" + component.getName() + "\"] \n";
 
 				addDependenciesBetweenComponents(component.getName(), component.getComponentDependencies(), false, false,
-						dependencyStrings);
+						dependencyStrings, interfaces);
 			}
 			return description;
 		} else {
@@ -276,43 +291,82 @@ public class PlantUMLStringConverter {
 		return tagToName;
 	}
 
+	
 	private void addDependenciesBetweenPackages(String name, String type, Dependencies dependencies, boolean service, boolean module,
-			List<String> dependencyStrings) {
+			List<String> dependencyStrings, List<String> interfaces) {
 		if (dependencies != null) {
 
 			for (String dependency : dependencies.getDependency()) {
-				dependencyStrings.add("\"" + type + ": " + name + "\"" + " ..> " + "\"" + type + ": " + getDependencyDisplayString(service, module, dependency) + "\" : use \n");
+				dependencyStrings.add("\"" + type + ": " + name + "\"" + " ..> " + "\"" + type + ": " + getDependencyDisplayString(service, module, dependency) + "\" : <<use>> \n");
 			}
-
 			for (RestDependency restDependency : dependencies.getRestDependency()) {
-				String usage = "\"" + restDependency.getMethod() + ": " + restDependency.getPath() + "\"";
-				dependencyStrings
-						.add("\"" + type + ": " + name + "\"" + " --> " + "\"" + type + ": " + getDependencyDisplayString(service, module, restDependency.getCalls()) + "\" : " + usage + " \n");
+				
+				String serviceAndInterface = restDependency.getCalls() + "_" + restDependency.getPath();
+				String interfaceAlias;
+				if (serviceNameAndinterfaceToAlias.get(serviceAndInterface) == null) {
+					interfaceCounter++;
+					interfaceAlias = "I" + interfaceCounter;
+					serviceNameAndinterfaceToAlias.put(serviceAndInterface, interfaceAlias);
+					
+					String newInterface = "() \"" + restDependency.getPath() + "\" as " + interfaceAlias + "\n";
+					interfaces.add(newInterface);
+					
+					String toInterface = "\"" + type + ": " + getDependencyDisplayString(service, module, restDependency.getCalls()) + "\"" + " -- " + interfaceAlias+ " \n";
+					dependencyStrings.add(toInterface);
+				} else {
+					interfaceAlias = serviceNameAndinterfaceToAlias.get(serviceAndInterface);
+				}
+				
+				String useInterface = "\"" + type + ": " + name + "\"" + " --( " + interfaceAlias + " : <<" + restDependency.getMethod() + ">>\n";
+				
+				dependencyStrings.add(useInterface);
 			}
 		}
 	}
 
 	private void addDependenciesBetweenComponents(String name, Dependencies dependencies,
-			boolean service, boolean module, List<String> dependencyStrings) {
+			boolean service, boolean module, List<String> dependencyStrings, List<String> interfaces) {
 		if (dependencies != null) {
 			for (String dependency : dependencies.getDependency()) {
-				dependencyStrings.add("[\"" + name + "\"]" + " ..> " + "[\"" + getDependencyDisplayString(service, module, dependency) + "\"] : use \n");
+				dependencyStrings.add("[\"" + name + "\"]" + " ..> " + "[\"" + getDependencyDisplayString(service, module, dependency) + "\"] : <<use>> \n");
 			}
 
 			for (RestDependency restDependency : dependencies.getRestDependency()) {
-				String usage = "\"" + restDependency.getMethod() + ": " + restDependency.getPath() + "\"";
-				dependencyStrings.add(
-						"[\"" + name + "\"]" + " --> " + "[\"" + getDependencyDisplayString(service, module, restDependency.getCalls()) + "\"] : " + usage + " \n");
+				
+				String serviceAndInterface = restDependency.getCalls() + "_" + restDependency.getPath();
+				String interfaceAlias;
+				if (serviceNameAndinterfaceToAlias.get(serviceAndInterface) == null) {
+					interfaceCounter++;
+					interfaceAlias = "I" + interfaceCounter;
+					serviceNameAndinterfaceToAlias.put(serviceAndInterface, interfaceAlias);
+					
+					String newInterface = "() \"" + restDependency.getPath() + "\" as " + interfaceAlias+ "\n";
+					interfaces.add(newInterface);
+					
+					String toInterface = "[\"" + getDependencyDisplayString(service, module, restDependency.getCalls()) + "\"]" + " -- " + interfaceAlias + "\n";
+					dependencyStrings.add(toInterface);
+				} else {
+					interfaceAlias = serviceNameAndinterfaceToAlias.get(serviceAndInterface);
+				}
+				
+								
+				String useInterface = "[\"" + name + "\"]" + " --( " + interfaceAlias + " : <<" + restDependency.getMethod() + ">>\n";
+				dependencyStrings.add(useInterface);
 			}
 		}
 	}
 
 	private String getDependencyDisplayString(boolean service, boolean module, String dependency) {
-		if (service && serviceTagToName != null) {
+		if (dependency == null || dependency.isEmpty()) {
+			java.lang.System.out.println("DEPENDENCY:" + dependency);
+		}
+		if (service && serviceTagToName != null) { //current dependency on service level, there were no double names in services
 			String result = serviceTagToName.get(dependency);
+			java.lang.System.out.println(dependency + "->" + result + "(service)");
 			return (result == null) ? dependency : result;
-		} else if (module && moduleTagToName != null) {
+		} else if (module && moduleTagToName != null) { //current dependency on module level, there were no double names in modules
 			String result = moduleTagToName.get(dependency);
+			java.lang.System.out.println(dependency + "->" + result + "(module)");
 			return (result == null) ? dependency : result;
 		}
 		return dependency;

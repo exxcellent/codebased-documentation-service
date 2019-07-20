@@ -95,12 +95,14 @@ public class ServiceConnector {
 			for (ConsumeDescription currentConsumeDescription : currentServiceToTripleEntry.getValue()) {
 				String dependServiceTag = currentConsumeDescription.getServiceName();
 
-				if (serviceNames.contains(dependServiceTag)
+				if (containsServicesStartingWith(serviceNames, dependServiceTag)
 						&& !dependServiceTag.equals(ConsumesAPI.DEFAULT_SERVICE)) {
-					APIInfoObject matchingService = getApiInfoObjectByServiceName(providesTriples, dependServiceTag);
-
-					List<Dependency> matches = getMatchingPathAndMethod(currentServiceToTripleEntry.getValue(),
+					List<APIInfoObject> matchingServices = getApiInfoObjectByServiceName(providesTriples, dependServiceTag);
+					List<Dependency> matches = null;
+					for (APIInfoObject matchingService : matchingServices) {
+						matches = getMatchingPathAndMethod(currentServiceToTripleEntry.getValue(),
 							matchingService);
+					}
 					if (matches != null) {
 						serviceDependencyDescription.addAll(matches);
 					} else {
@@ -119,6 +121,15 @@ public class ServiceConnector {
 		}
 
 		return consumeWithoutMatchOrName;
+	}
+	
+	private boolean containsServicesStartingWith(List<String> names, String name) {
+		for (String serviceName : names) {
+			if (name.startsWith(name)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private Map<String, List<ConsumeDescription>> matchByPath(Map<String, List<ConsumeDescription>> consumeTriples,
@@ -211,13 +222,14 @@ public class ServiceConnector {
 		}
 	}
 
-	private APIInfoObject getApiInfoObjectByServiceName(List<APIInfoObject> apiInfos, String serviceName) {
+	private List<APIInfoObject> getApiInfoObjectByServiceName(List<APIInfoObject> apiInfos, String serviceName) {
+		List<APIInfoObject> infoObject = new ArrayList<>();
 		for (APIInfoObject apiInfo : apiInfos) {
 			if (apiInfo.getMicroserviceTag().equals(serviceName) || apiInfo.getMicroserviceTag().startsWith(serviceName)) {
-				return apiInfo;
+				infoObject.add(apiInfo);
 			}
 		}
-		return null;
+		return infoObject;
 	}
 
 	private Set<String> getMethodsOfConsumes(ConsumeDescription consumes, String path) {

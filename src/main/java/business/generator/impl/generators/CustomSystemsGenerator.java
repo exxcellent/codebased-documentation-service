@@ -7,7 +7,7 @@ import data.model.xml.Subsystem;
 import data.model.xml.System;
 import data.model.xml.Systems;
 
-public class SystemsCustomizer {
+public class CustomSystemsGenerator {
 
 	public Systems getModuleDiagram(Systems systems) {
 		for (System system : systems.getSystem()) {

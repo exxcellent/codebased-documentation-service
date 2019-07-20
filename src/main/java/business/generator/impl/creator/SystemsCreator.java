@@ -5,7 +5,7 @@ import java.util.Set;
 
 import javax.xml.bind.JAXBException;
 
-import business.converter.XMLObjectConverter;
+import business.converter.InfoObjectToXMLConverter;
 import business.model.Dependency;
 import collectors.models.maven.CollectedMavenInfoObject;
 import data.file.JaxbStringMarshaller;
@@ -16,7 +16,7 @@ import data.model.xml.Service;
 import data.model.xml.Subsystem;
 import data.model.xml.Systems;
 
-public class SystemsFactory {
+public class SystemsCreator {
 
 	private List<CollectedMavenInfoObject> infoObjects;
 	private List<Dependency> serviceDependencies;
@@ -24,7 +24,7 @@ public class SystemsFactory {
 	private String baseSystems;
 	private String baseSystemsWithoutModules;
 
-	public SystemsFactory(List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies) {
+	public SystemsCreator(List<CollectedMavenInfoObject> infoObjects, List<Dependency> serviceDependencies) {
 		this.infoObjects = infoObjects;
 		this.serviceDependencies = serviceDependencies;
 	}
@@ -76,7 +76,7 @@ public class SystemsFactory {
 
 	private Systems createBaseSystems() {
 		Systems systems = new Systems();
-		XMLObjectConverter creator = new XMLObjectConverter();
+		InfoObjectToXMLConverter creator = new InfoObjectToXMLConverter();
 
 		List<data.model.xml.System> system = creator.getSystems(infoObjects);
 		creator.addSystemDependencies(infoObjects, serviceDependencies, system);
@@ -97,7 +97,7 @@ public class SystemsFactory {
 
 	private Systems createBaseSystemsWithoutModule() {
 		Systems systems = new Systems();
-		XMLObjectConverter creator = new XMLObjectConverter();
+		InfoObjectToXMLConverter creator = new InfoObjectToXMLConverter();
 
 		List<data.model.xml.System> system = creator.getSystems(infoObjects);
 		creator.addSystemDependencies(infoObjects, serviceDependencies, system);
@@ -117,7 +117,7 @@ public class SystemsFactory {
 
 	private Systems createBaseSystemsRest(Set<DependencyPlacement> placeForRestDependency) {
 		Systems systems = new Systems();
-		XMLObjectConverter creator = new XMLObjectConverter();
+		InfoObjectToXMLConverter creator = new InfoObjectToXMLConverter();
 
 		List<data.model.xml.System> system = creator.getSystems(infoObjects);
 		List<Subsystem> subsys = creator.addSubsystems(infoObjects, system);

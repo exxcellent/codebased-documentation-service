@@ -29,7 +29,7 @@ import data.model.xml.System;
  * @author gmittmann
  *
  */
-public class XMLObjectConverter {
+public class InfoObjectToXMLConverter {
 
 	/**
 	 * Gets all systems defined in the given InfoObjects as generated System
